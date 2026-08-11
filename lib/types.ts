@@ -1,0 +1,71 @@
+export type Household = {
+  id: string;
+  name: string;
+  invite_code: string;
+  created_at: string;
+};
+
+export type HouseholdMember = {
+  id: string;
+  household_id: string;
+  user_id: string;
+  display_name: string | null;
+};
+
+export type Category = {
+  id: string;
+  household_id: string;
+  name: string;
+  icon: string;
+  is_discretionary: boolean;
+};
+
+export type CategoryBudget = {
+  id: string;
+  household_id: string;
+  category_id: string;
+  monthly_limit: number;
+  alert_threshold_pct: number;
+};
+
+export type Card = {
+  id: string;
+  household_id: string;
+  name: string;
+  closing_day: number;
+  payment_day: number;
+  credit_limit: number | null;
+  color: string;
+};
+
+export type IncomeSource = {
+  id: string;
+  household_id: string;
+  name: string;
+  amount: number;
+  expected_day: number;
+  owner_name: string | null;
+  active: boolean;
+};
+
+export type IncomeEntry = {
+  id: string;
+  household_id: string;
+  income_source_id: string | null;
+  description: string;
+  amount: number;
+  entry_date: string;
+  is_extra: boolean;
+};
+
+export type Expense = {
+  id: string;
+  household_id: string;
+  category_id: string;
+  card_id: string | null;
+  description: string;
+  amount: number;
+  expense_date: string;
+  is_recurring: boolean;
+  is_extra: boolean;
+};

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import AuthGuard from "@/components/AuthGuard";
 import { useHousehold } from "@/lib/HouseholdContext";
 import { useTable } from "@/lib/hooks";
@@ -32,6 +32,8 @@ function IngresosContent() {
     ascending: false,
   });
 
+  const [editingEntry, setEditingEntry] = useState<IncomeEntry | null>(null);
+
   const [monthFilter, setMonthFilter] = useState<string>(() => {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
@@ -55,6 +57,13 @@ function IngresosContent() {
     refreshEntries();
   }
 
+  async function deleteEntry(id: string) {
+    if (!confirm("¿Eliminar este ingreso?")) return;
+    await supabase.from("income_entries").delete().eq("id", id);
+    if (editingEntry?.id === id) setEditingEntry(null);
+    refreshEntries();
+  }
+
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold">💵 Ingresos</h1>
@@ -62,9 +71,9 @@ function IngresosContent() {
       <div className="card bg-sky-50 border-sky-200 text-sky-900 text-sm">
         💡 <strong>¿Cómo funciona esto?</strong> Los "ingresos recurrentes" de abajo son solo una
         plantilla para que la app te avise cuándo esperar cada sueldo — por sí solos no cuentan en
-        el dashboard. Cuando el ingreso llegue de verdad, dale al botón{" "}
-        <strong>"✅ Marcar recibido"</strong> (o regístralo manualmente abajo) para que sí sume en
-        tus totales y gráficos.
+        el dashboard. Si activaste el auto-registro (ver README), se registran solos el día que
+        corresponda; si no, usa <strong>"✅ Marcar recibido"</strong> o regístralo manualmente
+        abajo.
       </div>
 
       <IncomeSourceManager
@@ -75,12 +84,17 @@ function IngresosContent() {
       />
 
       <div className="card">
-        <h2 className="font-semibold mb-3">✍️ Registrar ingreso</h2>
+        <h2 className="font-semibold mb-3">✍️ {editingEntry ? "Editar ingreso" : "Registrar ingreso"}</h2>
         <IncomeEntryForm
           sources={sources}
           householdId={householdId}
           userId={session?.user.id ?? null}
-          onCreated={refreshEntries}
+          editingEntry={editingEntry}
+          onCancelEdit={() => setEditingEntry(null)}
+          onSaved={() => {
+            setEditingEntry(null);
+            refreshEntries();
+          }}
         />
       </div>
 
@@ -109,11 +123,12 @@ function IngresosContent() {
                 <th className="py-2 pr-2">Fecha</th>
                 <th className="py-2 pr-2">Descripción</th>
                 <th className="py-2 pr-2 text-right">Monto</th>
+                <th className="py-2 pr-2"></th>
               </tr>
             </thead>
             <tbody>
               {filtered.map((e) => (
-                <tr key={e.id} className="border-b last:border-0">
+                <tr key={e.id} className={`border-b last:border-0 ${editingEntry?.id === e.id ? "bg-brand-50" : ""}`}>
                   <td className="py-2 pr-2 whitespace-nowrap">
                     {new Date(e.entry_date + "T00:00:00").toLocaleDateString("es-ES")}
                   </td>
@@ -127,6 +142,23 @@ function IngresosContent() {
                   </td>
                   <td className="py-2 pr-2 text-right font-medium">
                     {formatCurrency(Number(e.amount))}
+                  </td>
+                  <td className="py-2 pr-2 text-right whitespace-nowrap">
+                    <button
+                      onClick={() => {
+                        setEditingEntry(e);
+                        window.scrollTo({ top: 0, behavior: "smooth" });
+                      }}
+                      className="text-brand-600 hover:underline text-xs mr-3"
+                    >
+                      editar
+                    </button>
+                    <button
+                      onClick={() => deleteEntry(e.id)}
+                      className="text-red-500 hover:underline text-xs"
+                    >
+                      eliminar
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -149,27 +181,47 @@ function IncomeSourceManager({
   onChange: () => void;
   onMarkReceived: (source: IncomeSource) => void;
 }) {
+  const [editingSource, setEditingSource] = useState<IncomeSource | null>(null);
   const [name, setName] = useState("");
   const [amount, setAmount] = useState("");
   const [expectedDay, setExpectedDay] = useState("1");
   const [owner, setOwner] = useState("");
   const [saving, setSaving] = useState(false);
 
-  async function addSource(e: React.FormEvent) {
+  useEffect(() => {
+    if (editingSource) {
+      setName(editingSource.name);
+      setAmount(String(editingSource.amount));
+      setExpectedDay(String(editingSource.expected_day));
+      setOwner(editingSource.owner_name ?? "");
+    } else {
+      setName("");
+      setAmount("");
+      setExpectedDay("1");
+      setOwner("");
+    }
+  }, [editingSource]);
+
+  async function saveSource(e: React.FormEvent) {
     e.preventDefault();
     if (!householdId || !name || !amount) return;
     setSaving(true);
-    await supabase.from("income_sources").insert({
-      household_id: householdId,
+
+    const payload = {
       name,
       amount: Number(amount),
       expected_day: Number(expectedDay),
       owner_name: owner || null,
-    });
+    };
+
+    if (editingSource) {
+      await supabase.from("income_sources").update(payload).eq("id", editingSource.id);
+    } else {
+      await supabase.from("income_sources").insert({ household_id: householdId, ...payload });
+    }
+
     setSaving(false);
-    setName("");
-    setAmount("");
-    setOwner("");
+    setEditingSource(null);
     onChange();
   }
 
@@ -181,6 +233,7 @@ function IncomeSourceManager({
   async function removeSource(id: string) {
     if (!confirm("¿Eliminar este ingreso recurrente?")) return;
     await supabase.from("income_sources").delete().eq("id", id);
+    if (editingSource?.id === id) setEditingSource(null);
     onChange();
   }
 
@@ -188,7 +241,15 @@ function IncomeSourceManager({
     <div className="card">
       <h2 className="font-semibold mb-3">🔁 Ingresos recurrentes (sueldos, etc.)</h2>
 
-      <form onSubmit={addSource} className="grid grid-cols-1 md:grid-cols-5 gap-3 items-end mb-4">
+      <form onSubmit={saveSource} className="grid grid-cols-1 md:grid-cols-5 gap-3 items-end mb-4">
+        {editingSource && (
+          <div className="md:col-span-5 flex items-center justify-between bg-brand-50 text-brand-700 text-sm rounded-lg px-3 py-2">
+            <span>✏️ Editando: {editingSource.name}</span>
+            <button type="button" onClick={() => setEditingSource(null)} className="underline">
+              Cancelar
+            </button>
+          </div>
+        )}
         <div className="md:col-span-2">
           <label className="label">Nombre</label>
           <input className="input" required value={name} onChange={(e) => setName(e.target.value)} placeholder="Ej. Sueldo Marco" />
@@ -207,7 +268,7 @@ function IncomeSourceManager({
         </div>
         <div className="md:col-span-5">
           <button type="submit" disabled={saving} className="btn-primary">
-            {saving ? "Guardando..." : "Agregar ingreso recurrente"}
+            {saving ? "Guardando..." : editingSource ? "Guardar cambios" : "Agregar ingreso recurrente"}
           </button>
         </div>
       </form>
@@ -227,7 +288,7 @@ function IncomeSourceManager({
           </thead>
           <tbody>
             {sources.map((s) => (
-              <tr key={s.id} className="border-b last:border-0">
+              <tr key={s.id} className={`border-b last:border-0 ${editingSource?.id === s.id ? "bg-brand-50" : ""}`}>
                 <td className="py-2 pr-2">{s.name}</td>
                 <td className="py-2 pr-2">{s.expected_day}</td>
                 <td className="py-2 pr-2">{s.owner_name ?? "—"}</td>
@@ -245,7 +306,13 @@ function IncomeSourceManager({
                     ✅ Marcar recibido
                   </button>
                 </td>
-                <td className="py-2 pr-2 text-right">
+                <td className="py-2 pr-2 text-right whitespace-nowrap">
+                  <button
+                    onClick={() => setEditingSource(s)}
+                    className="text-brand-600 hover:underline text-xs mr-3"
+                  >
+                    editar
+                  </button>
                   <button onClick={() => removeSource(s.id)} className="text-red-500 hover:underline text-xs">
                     eliminar
                   </button>
@@ -263,12 +330,16 @@ function IncomeEntryForm({
   sources,
   householdId,
   userId,
-  onCreated,
+  editingEntry,
+  onCancelEdit,
+  onSaved,
 }: {
   sources: IncomeSource[];
   householdId: string | null;
   userId: string | null;
-  onCreated: () => void;
+  editingEntry: IncomeEntry | null;
+  onCancelEdit: () => void;
+  onSaved: () => void;
 }) {
   const [description, setDescription] = useState("");
   const [amount, setAmount] = useState("");
@@ -277,28 +348,59 @@ function IncomeEntryForm({
   const [isExtra, setIsExtra] = useState(false);
   const [saving, setSaving] = useState(false);
 
+  useEffect(() => {
+    if (editingEntry) {
+      setDescription(editingEntry.description);
+      setAmount(String(editingEntry.amount));
+      setSourceId(editingEntry.income_source_id ?? "");
+      setDate(editingEntry.entry_date);
+      setIsExtra(editingEntry.is_extra);
+    } else {
+      setDescription("");
+      setAmount("");
+      setSourceId("");
+      setDate(new Date().toISOString().slice(0, 10));
+      setIsExtra(false);
+    }
+  }, [editingEntry]);
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!householdId || !amount || !description) return;
     setSaving(true);
-    await supabase.from("income_entries").insert({
-      household_id: householdId,
+
+    const payload = {
       income_source_id: sourceId || null,
       description,
       amount: Number(amount),
       entry_date: date,
       is_extra: isExtra,
-      created_by: userId,
-    });
+    };
+
+    if (editingEntry) {
+      await supabase.from("income_entries").update(payload).eq("id", editingEntry.id);
+    } else {
+      await supabase.from("income_entries").insert({
+        household_id: householdId,
+        created_by: userId,
+        ...payload,
+      });
+    }
+
     setSaving(false);
-    setDescription("");
-    setAmount("");
-    setIsExtra(false);
-    onCreated();
+    onSaved();
   }
 
   return (
     <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-5 gap-3 items-end">
+      {editingEntry && (
+        <div className="md:col-span-5 flex items-center justify-between bg-brand-50 text-brand-700 text-sm rounded-lg px-3 py-2">
+          <span>✏️ Editando: {editingEntry.description}</span>
+          <button type="button" onClick={onCancelEdit} className="underline">
+            Cancelar
+          </button>
+        </div>
+      )}
       <div>
         <label className="label">Descripción</label>
         <input className="input" required value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Ej. Sueldo agosto" />
@@ -328,7 +430,7 @@ function IncomeEntryForm({
           Ingreso extra
         </label>
         <button type="submit" disabled={saving} className="btn-primary ml-auto">
-          {saving ? "Guardando..." : "Agregar"}
+          {saving ? "Guardando..." : editingEntry ? "Guardar cambios" : "Agregar"}
         </button>
       </div>
     </form>

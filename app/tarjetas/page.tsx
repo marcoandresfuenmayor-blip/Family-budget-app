@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import AuthGuard from "@/components/AuthGuard";
 import { useHousehold } from "@/lib/HouseholdContext";
 import { useTable } from "@/lib/hooks";
@@ -23,6 +23,7 @@ function TarjetasContent() {
   });
   const { data: expenses } = useTable<Expense>("expenses", householdId);
 
+  const [editingCard, setEditingCard] = useState<Card | null>(null);
   const [name, setName] = useState("");
   const [closingDay, setClosingDay] = useState("15");
   const [paymentDay, setPaymentDay] = useState("25");
@@ -30,31 +31,51 @@ function TarjetasContent() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (editingCard) {
+      setName(editingCard.name);
+      setClosingDay(String(editingCard.closing_day));
+      setPaymentDay(String(editingCard.payment_day));
+      setCreditLimit(editingCard.credit_limit ? String(editingCard.credit_limit) : "");
+    } else {
+      setName("");
+      setClosingDay("15");
+      setPaymentDay("25");
+      setCreditLimit("");
+    }
+    setError(null);
+  }, [editingCard]);
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!householdId || !name) return;
     setSaving(true);
     setError(null);
-    const { error } = await supabase.from("cards").insert({
-      household_id: householdId,
+
+    const payload = {
       name,
       closing_day: Number(closingDay),
       payment_day: Number(paymentDay),
       credit_limit: creditLimit ? Number(creditLimit) : null,
-    });
+    };
+
+    const { error } = editingCard
+      ? await supabase.from("cards").update(payload).eq("id", editingCard.id)
+      : await supabase.from("cards").insert({ household_id: householdId, ...payload });
+
     setSaving(false);
     if (error) {
       setError(error.message);
       return;
     }
-    setName("");
-    setCreditLimit("");
+    setEditingCard(null);
     refresh();
   }
 
   async function handleDelete(id: string) {
     if (!confirm("¿Eliminar esta tarjeta?")) return;
     await supabase.from("cards").delete().eq("id", id);
+    if (editingCard?.id === id) setEditingCard(null);
     refresh();
   }
 
@@ -63,6 +84,14 @@ function TarjetasContent() {
       <h1 className="text-2xl font-bold">💳 Tarjetas de crédito</h1>
 
       <form onSubmit={handleSubmit} className="card grid grid-cols-1 md:grid-cols-5 gap-3 items-end">
+        {editingCard && (
+          <div className="md:col-span-5 flex items-center justify-between bg-brand-50 text-brand-700 text-sm rounded-lg px-3 py-2">
+            <span>✏️ Editando: {editingCard.name}</span>
+            <button type="button" onClick={() => setEditingCard(null)} className="underline">
+              Cancelar
+            </button>
+          </div>
+        )}
         <div>
           <label className="label">Nombre</label>
           <input className="input" required value={name} onChange={(e) => setName(e.target.value)} placeholder="Ej. Visa BBVA" />
@@ -81,7 +110,7 @@ function TarjetasContent() {
         </div>
         <div>
           <button type="submit" disabled={saving} className="btn-primary w-full">
-            {saving ? "Guardando..." : "Agregar tarjeta"}
+            {saving ? "Guardando..." : editingCard ? "Guardar cambios" : "Agregar tarjeta"}
           </button>
         </div>
         {error && <p className="md:col-span-5 text-sm text-red-600">{error}</p>}
@@ -117,7 +146,7 @@ function TarjetasContent() {
                 ? "bg-amber-500"
                 : "bg-emerald-500";
             return (
-              <div key={card.id} className="card">
+              <div key={card.id} className={`card ${editingCard?.id === card.id ? "ring-2 ring-brand-400" : ""}`}>
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="font-semibold">💳 {card.name}</h3>
                   <div className="flex items-center gap-2">
@@ -126,6 +155,15 @@ function TarjetasContent() {
                         {utilizationPct.toFixed(0)}% del límite
                       </span>
                     )}
+                    <button
+                      onClick={() => {
+                        setEditingCard(card);
+                        window.scrollTo({ top: 0, behavior: "smooth" });
+                      }}
+                      className="text-brand-600 hover:underline text-xs"
+                    >
+                      editar
+                    </button>
                     <button
                       onClick={() => handleDelete(card.id)}
                       className="text-red-500 hover:underline text-xs"

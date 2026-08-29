@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { Expense, IncomeEntry, SavingsGoal } from "@/lib/types";
 import { computeGoalProgress, formatCurrency } from "@/lib/utils";
@@ -18,33 +18,56 @@ export default function GoalsPanel({
   householdId: string | null;
   onChange: () => void;
 }) {
+  const [editingGoal, setEditingGoal] = useState<SavingsGoal | null>(null);
   const [name, setName] = useState("");
   const [targetAmount, setTargetAmount] = useState("");
   const [targetDate, setTargetDate] = useState("");
   const [saving, setSaving] = useState(false);
   const [showForm, setShowForm] = useState(false);
 
-  async function addGoal(e: React.FormEvent) {
-    e.preventDefault();
-    if (!householdId || !name || !targetAmount) return;
-    setSaving(true);
-    await supabase.from("savings_goals").insert({
-      household_id: householdId,
-      name,
-      target_amount: Number(targetAmount),
-      target_date: targetDate || null,
-    });
-    setSaving(false);
+  useEffect(() => {
+    if (editingGoal) {
+      setName(editingGoal.name);
+      setTargetAmount(String(editingGoal.target_amount));
+      setTargetDate(editingGoal.target_date ?? "");
+      setShowForm(true);
+    }
+  }, [editingGoal]);
+
+  function resetForm() {
+    setEditingGoal(null);
     setName("");
     setTargetAmount("");
     setTargetDate("");
     setShowForm(false);
+  }
+
+  async function saveGoal(e: React.FormEvent) {
+    e.preventDefault();
+    if (!householdId || !name || !targetAmount) return;
+    setSaving(true);
+
+    const payload = {
+      name,
+      target_amount: Number(targetAmount),
+      target_date: targetDate || null,
+    };
+
+    if (editingGoal) {
+      await supabase.from("savings_goals").update(payload).eq("id", editingGoal.id);
+    } else {
+      await supabase.from("savings_goals").insert({ household_id: householdId, ...payload });
+    }
+
+    setSaving(false);
+    resetForm();
     onChange();
   }
 
   async function removeGoal(id: string) {
     if (!confirm("¿Eliminar esta meta?")) return;
     await supabase.from("savings_goals").delete().eq("id", id);
+    if (editingGoal?.id === id) resetForm();
     onChange();
   }
 
@@ -52,13 +75,19 @@ export default function GoalsPanel({
     <div className="card">
       <div className="flex items-center justify-between mb-3">
         <h2 className="font-semibold">🏡 Metas de ahorro familiar</h2>
-        <button onClick={() => setShowForm((v) => !v)} className="text-sm text-brand-600 hover:underline">
+        <button
+          onClick={() => (showForm ? resetForm() : setShowForm(true))}
+          className="text-sm text-brand-600 hover:underline"
+        >
           {showForm ? "Cancelar" : "+ Nueva meta"}
         </button>
       </div>
 
       {showForm && (
-        <form onSubmit={addGoal} className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end mb-4 bg-slate-50 p-3 rounded-xl">
+        <form onSubmit={saveGoal} className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end mb-4 bg-slate-50 p-3 rounded-xl">
+          {editingGoal && (
+            <div className="md:col-span-4 text-sm text-brand-700">✏️ Editando: {editingGoal.name}</div>
+          )}
           <div className="md:col-span-2">
             <label className="label">Nombre del proyecto</label>
             <input
@@ -87,7 +116,7 @@ export default function GoalsPanel({
           </div>
           <div className="md:col-span-4">
             <button type="submit" disabled={saving} className="btn-primary">
-              {saving ? "Guardando..." : "Crear meta"}
+              {saving ? "Guardando..." : editingGoal ? "Guardar cambios" : "Crear meta"}
             </button>
           </div>
         </form>
@@ -113,6 +142,12 @@ export default function GoalsPanel({
                     <span className="font-bold text-purple-800">
                       {formatCurrency(saved)} / {formatCurrency(Number(goal.target_amount))}
                     </span>
+                    <button
+                      onClick={() => setEditingGoal(goal)}
+                      className="text-brand-600 hover:underline text-xs"
+                    >
+                      editar
+                    </button>
                     <button
                       onClick={() => removeGoal(goal.id)}
                       className="text-red-500 hover:underline text-xs"

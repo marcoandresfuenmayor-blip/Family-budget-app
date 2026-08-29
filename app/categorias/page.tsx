@@ -28,8 +28,12 @@ function CategoriasContent() {
     householdId
   );
   const [household, setHousehold] = useState<Household | null>(null);
-  const [newCategory, setNewCategory] = useState("");
+
+  const [editingCategory, setEditingCategory] = useState<Category | null>(null);
+  const [name, setName] = useState("");
+  const [icon, setIcon] = useState("📦");
   const [isDiscretionary, setIsDiscretionary] = useState(true);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (!householdId) return;
@@ -41,20 +45,43 @@ function CategoriasContent() {
       .then(({ data }) => setHousehold(data));
   }, [householdId]);
 
-  async function addCategory(e: React.FormEvent) {
-    e.preventDefault();
-    if (!householdId || !newCategory) return;
-    const { data, error } = await supabase
-      .from("categories")
-      .insert({ household_id: householdId, name: newCategory, is_discretionary: isDiscretionary })
-      .select()
-      .single();
-    if (!error && data) {
-      await supabase
-        .from("category_budgets")
-        .insert({ household_id: householdId, category_id: data.id, monthly_limit: 0 });
+  useEffect(() => {
+    if (editingCategory) {
+      setName(editingCategory.name);
+      setIcon(editingCategory.icon || "📦");
+      setIsDiscretionary(editingCategory.is_discretionary);
+    } else {
+      setName("");
+      setIcon("📦");
+      setIsDiscretionary(true);
     }
-    setNewCategory("");
+  }, [editingCategory]);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!householdId || !name) return;
+    setSaving(true);
+
+    if (editingCategory) {
+      await supabase
+        .from("categories")
+        .update({ name, icon, is_discretionary: isDiscretionary })
+        .eq("id", editingCategory.id);
+    } else {
+      const { data } = await supabase
+        .from("categories")
+        .insert({ household_id: householdId, name, icon, is_discretionary: isDiscretionary })
+        .select()
+        .single();
+      if (data) {
+        await supabase
+          .from("category_budgets")
+          .insert({ household_id: householdId, category_id: data.id, monthly_limit: 0 });
+      }
+    }
+
+    setSaving(false);
+    setEditingCategory(null);
     refreshCategories();
     refreshBudgets();
   }
@@ -85,6 +112,7 @@ function CategoriasContent() {
   async function deleteCategory(id: string) {
     if (!confirm("¿Eliminar categoría? Los gastos ya cargados con esta categoría no se eliminan.")) return;
     await supabase.from("categories").delete().eq("id", id);
+    if (editingCategory?.id === id) setEditingCategory(null);
     refreshCategories();
     refreshBudgets();
   }
@@ -105,17 +133,29 @@ function CategoriasContent() {
         </div>
       )}
 
-      <form onSubmit={addCategory} className="card flex flex-wrap gap-3 items-end">
+      <form onSubmit={handleSubmit} className="card flex flex-wrap gap-3 items-end">
+        {editingCategory && (
+          <div className="w-full flex items-center justify-between bg-brand-50 text-brand-700 text-sm rounded-lg px-3 py-2">
+            <span>✏️ Editando: {editingCategory.icon} {editingCategory.name}</span>
+            <button type="button" onClick={() => setEditingCategory(null)} className="underline">
+              Cancelar
+            </button>
+          </div>
+        )}
+        <div className="w-20">
+          <label className="label">Ícono</label>
+          <input className="input text-center" value={icon} onChange={(e) => setIcon(e.target.value)} />
+        </div>
         <div className="flex-1 min-w-[180px]">
-          <label className="label">Nueva categoría</label>
-          <input className="input" value={newCategory} onChange={(e) => setNewCategory(e.target.value)} placeholder="Ej. Mascotas" />
+          <label className="label">{editingCategory ? "Nombre de la categoría" : "Nueva categoría"}</label>
+          <input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Ej. Mascotas" />
         </div>
         <label className="flex items-center gap-2 text-sm text-slate-600 mb-2">
           <input type="checkbox" checked={isDiscretionary} onChange={(e) => setIsDiscretionary(e.target.checked)} />
           Gasto reducible (discrecional)
         </label>
-        <button type="submit" className="btn-primary">
-          Agregar categoría
+        <button type="submit" disabled={saving} className="btn-primary">
+          {saving ? "Guardando..." : editingCategory ? "Guardar cambios" : "Agregar categoría"}
         </button>
       </form>
 
@@ -134,7 +174,7 @@ function CategoriasContent() {
             {categories.map((c) => {
               const budget = budgets.find((b) => b.category_id === c.id);
               return (
-                <tr key={c.id} className="border-b last:border-0">
+                <tr key={c.id} className={`border-b last:border-0 ${editingCategory?.id === c.id ? "bg-brand-50" : ""}`}>
                   <td className="py-2 pr-2">
                     {c.icon} {c.name}
                   </td>
@@ -161,7 +201,16 @@ function CategoriasContent() {
                       onBlur={(e) => updateThreshold(c.id, e.target.value)}
                     />
                   </td>
-                  <td className="py-2 pr-2 text-right">
+                  <td className="py-2 pr-2 text-right whitespace-nowrap">
+                    <button
+                      onClick={() => {
+                        setEditingCategory(c);
+                        window.scrollTo({ top: 0, behavior: "smooth" });
+                      }}
+                      className="text-brand-600 hover:underline text-xs mr-3"
+                    >
+                      editar
+                    </button>
                     <button
                       onClick={() => deleteCategory(c.id)}
                       className="text-red-500 hover:underline text-xs"

@@ -19,6 +19,39 @@ export function isInCurrentMonth(dateStr: string, base = new Date()) {
   return d.getFullYear() === base.getFullYear() && d.getMonth() === base.getMonth();
 }
 
+// Formato "YYYY-MM" de un mes cualquiera (para selects tipo <input type="month">).
+export function toMonthValue(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+}
+
+export function isInMonth(dateStr: string, monthValue: string) {
+  return dateStr.startsWith(monthValue);
+}
+
+export function shiftMonth(monthValue: string, delta: number) {
+  const [y, m] = monthValue.split("-").map(Number);
+  const d = new Date(y, m - 1 + delta, 1);
+  return toMonthValue(d);
+}
+
+export function monthValueToDate(monthValue: string) {
+  const [y, m] = monthValue.split("-").map(Number);
+  return new Date(y, m - 1, 1);
+}
+
+export function monthLabel(monthValue: string) {
+  return monthValueToDate(monthValue).toLocaleDateString("es-ES", {
+    month: "long",
+    year: "numeric",
+  });
+}
+
+// % de cambio entre dos totales, para comparar contra el mes anterior.
+export function percentChange(current: number, previous: number): number | null {
+  if (previous <= 0) return null;
+  return ((current - previous) / previous) * 100;
+}
+
 // Próxima fecha (día del mes) a partir de hoy. Si ya pasó este mes, devuelve la del mes siguiente.
 export function nextOccurrence(day: number, base = new Date()): Date {
   const clampedDay = Math.min(day, daysInMonth(base.getFullYear(), base.getMonth()));

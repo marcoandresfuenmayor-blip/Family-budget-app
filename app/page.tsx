@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
   Bar,
   BarChart,
@@ -29,7 +29,12 @@ import {
   buildIncomeAlerts,
   buildRecommendations,
   formatCurrency,
-  isInCurrentMonth,
+  isInMonth,
+  monthLabel,
+  monthValueToDate,
+  percentChange,
+  shiftMonth,
+  toMonthValue,
 } from "@/lib/utils";
 
 const PIE_COLORS = [
@@ -65,19 +70,41 @@ function DashboardContent() {
     column: "created_at",
   });
 
+  const [selectedMonth, setSelectedMonth] = useState(() => toMonthValue(new Date()));
+  const previousMonth = shiftMonth(selectedMonth, -1);
+  const isCurrentMonthSelected = selectedMonth === toMonthValue(new Date());
+
   const monthExpenses = useMemo(
-    () => expenses.filter((e) => isInCurrentMonth(e.expense_date)),
-    [expenses]
+    () => expenses.filter((e) => isInMonth(e.expense_date, selectedMonth)),
+    [expenses, selectedMonth]
   );
   const monthIncome = useMemo(
-    () => incomeEntries.filter((e) => isInCurrentMonth(e.entry_date)),
-    [incomeEntries]
+    () => incomeEntries.filter((e) => isInMonth(e.entry_date, selectedMonth)),
+    [incomeEntries, selectedMonth]
+  );
+  const prevMonthExpenses = useMemo(
+    () => expenses.filter((e) => isInMonth(e.expense_date, previousMonth)),
+    [expenses, previousMonth]
+  );
+  const prevMonthIncome = useMemo(
+    () => incomeEntries.filter((e) => isInMonth(e.entry_date, previousMonth)),
+    [incomeEntries, previousMonth]
   );
 
   const totalSpent = monthExpenses.reduce((s, e) => s + Number(e.amount), 0);
   const totalIncome = monthIncome.reduce((s, e) => s + Number(e.amount), 0);
   const balance = totalIncome - totalSpent;
 
+  const prevTotalSpent = prevMonthExpenses.reduce((s, e) => s + Number(e.amount), 0);
+  const prevTotalIncome = prevMonthIncome.reduce((s, e) => s + Number(e.amount), 0);
+  const prevBalance = prevTotalIncome - prevTotalSpent;
+
+  const spentDelta = percentChange(totalSpent, prevTotalSpent);
+  const incomeDelta = percentChange(totalIncome, prevTotalIncome);
+  const balanceDelta = percentChange(balance, prevBalance);
+
+  // Las alertas y recomendaciones siempre reflejan el momento actual (hoy),
+  // sin importar qué mes estés revisando en el resto del dashboard.
   const alerts: Alert[] = useMemo(
     () => [
       ...buildCategoryAlerts(categories, budgets, expenses),
@@ -88,8 +115,8 @@ function DashboardContent() {
   );
 
   const recommendations = useMemo(
-    () => buildRecommendations(categories, budgets, expenses, totalIncome),
-    [categories, budgets, expenses, totalIncome]
+    () => buildRecommendations(categories, budgets, expenses, totalIncome, monthValueToDate(selectedMonth)),
+    [categories, budgets, expenses, totalIncome, selectedMonth]
   );
 
   const chartData = categories.map((c) => {
@@ -104,29 +131,64 @@ function DashboardContent() {
     };
   });
 
-  const pieData = chartData.filter((d) => d.Gastado > 0);
+  const pieDataRaw = chartData.filter((d) => d.Gastado > 0);
+  const pieTotal = pieDataRaw.reduce((s, d) => s + d.Gastado, 0);
+  const pieData = pieDataRaw.map((d) => ({ ...d, pct: pieTotal > 0 ? (d.Gastado / pieTotal) * 100 : 0 }));
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold">📊 Dashboard familiar</h1>
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <h1 className="text-2xl font-bold">
+          📊 Dashboard familiar <span className="text-base font-normal text-slate-400">— {monthLabel(selectedMonth)}</span>
+        </h1>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setSelectedMonth(shiftMonth(selectedMonth, -1))}
+            className="btn-secondary !px-2 !py-1.5"
+            aria-label="Mes anterior"
+          >
+            ←
+          </button>
+          <input
+            type="month"
+            className="input !w-auto"
+            value={selectedMonth}
+            onChange={(e) => setSelectedMonth(e.target.value)}
+          />
+          <button
+            onClick={() => setSelectedMonth(shiftMonth(selectedMonth, 1))}
+            disabled={isCurrentMonthSelected}
+            className="btn-secondary !px-2 !py-1.5"
+            aria-label="Mes siguiente"
+          >
+            →
+          </button>
+        </div>
+      </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <SummaryCard
           label="Ingresos del mes"
           value={totalIncome}
           emoji="💵"
+          delta={incomeDelta}
+          goodDirection="up"
           className="bg-emerald-50 border-emerald-200 text-emerald-800"
         />
         <SummaryCard
           label="Gastos del mes"
           value={totalSpent}
           emoji="🧾"
+          delta={spentDelta}
+          goodDirection="down"
           className="bg-rose-50 border-rose-200 text-rose-800"
         />
         <SummaryCard
           label="Balance"
           value={balance}
           emoji={balance >= 0 ? "🎉" : "⚠️"}
+          delta={balanceDelta}
+          goodDirection="up"
           className={
             balance >= 0
               ? "bg-brand-50 border-brand-100 text-brand-800"
@@ -163,15 +225,30 @@ function DashboardContent() {
         <div className="card">
           <h2 className="font-semibold mb-3">🥧 Distribución de gastos del mes</h2>
           {pieData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={280}>
+            <ResponsiveContainer width="100%" height={300}>
               <PieChart>
-                <Pie data={pieData} dataKey="Gastado" nameKey="name" outerRadius={100} label>
+                <Pie
+                  data={pieData}
+                  dataKey="Gastado"
+                  nameKey="name"
+                  outerRadius={100}
+                  label={(entry) => `${entry.pct.toFixed(0)}%`}
+                >
                   {pieData.map((_, i) => (
                     <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
                   ))}
                 </Pie>
-                <Tooltip formatter={(v: number) => formatCurrency(v)} />
-                <Legend />
+                <Tooltip
+                  formatter={(value: number, name: string, props: any) => [
+                    `${formatCurrency(value)} (${props.payload.pct.toFixed(0)}%)`,
+                    name,
+                  ]}
+                />
+                <Legend
+                  formatter={(value, entry: any) =>
+                    `${value} — ${entry.payload.pct.toFixed(0)}%`
+                  }
+                />
               </PieChart>
             </ResponsiveContainer>
           ) : (
@@ -219,18 +296,28 @@ function SummaryCard({
   value,
   emoji,
   className,
+  delta,
+  goodDirection,
 }: {
   label: string;
   value: number;
   emoji: string;
   className: string;
+  delta: number | null;
+  goodDirection: "up" | "down";
 }) {
+  const isGood = delta === null ? null : goodDirection === "up" ? delta >= 0 : delta <= 0;
   return (
     <div className={`card border ${className}`}>
       <p className="text-sm opacity-80 flex items-center gap-1.5">
         <span className="text-lg">{emoji}</span> {label}
       </p>
       <p className="text-2xl font-heading font-bold mt-1">{formatCurrency(value)}</p>
+      {delta !== null && (
+        <p className={`text-xs mt-1 font-medium ${isGood ? "text-emerald-700" : "text-red-600"}`}>
+          {delta >= 0 ? "▲" : "▼"} {Math.abs(delta).toFixed(0)}% vs mes anterior
+        </p>
+      )}
     </div>
   );
 }

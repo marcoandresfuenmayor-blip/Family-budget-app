@@ -68,6 +68,10 @@ export type Expense = {
   expense_date: string;
   is_recurring: boolean;
   is_extra: boolean;
+  created_by: string | null;
+  created_at: string;
+  updated_by?: string | null;
+  updated_at?: string | null;
 };
 
 export type SavingsGoal = {

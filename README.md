@@ -92,6 +92,17 @@ adicional (no borra nada de lo que ya tienes):
    del límite, y la de **Metas de ahorro**, donde puedes crear un proyecto familiar y ver tu
    progreso calculado automáticamente según tu ahorro real del mes.
 
+## 3.2 Activar mejoras v3 (editar gastos + saber quién registró)
+
+Corre esta migración adicional (también aditiva, no borra nada) para poder editar gastos ya
+cargados y ver qué persona del hogar registró o modificó cada uno:
+
+1. Ve a Supabase → **SQL Editor → New query**.
+2. Abre [`supabase/migration_v3_editar_gastos.sql`](./supabase/migration_v3_editar_gastos.sql),
+   copia su contenido y dale **Run**.
+3. Listo. En la sección de Gastos ahora hay un botón **"editar"** junto a "eliminar" en cada
+   fila, y una columna que muestra quién lo registró (o editó) y cuándo.
+
 ## 4. Desplegar en la nube (para que ambos la usen desde el celular)
 
 La forma más simple y gratuita es con [Vercel](https://vercel.com):

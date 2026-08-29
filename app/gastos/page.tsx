@@ -1,11 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import AuthGuard from "@/components/AuthGuard";
 import { useHousehold } from "@/lib/HouseholdContext";
 import { useTable } from "@/lib/hooks";
 import { supabase } from "@/lib/supabaseClient";
-import { Card, Category, Expense } from "@/lib/types";
+import { Card, Category, Expense, HouseholdMember } from "@/lib/types";
 import { formatCurrency } from "@/lib/utils";
 
 export default function GastosPage() {
@@ -22,11 +22,14 @@ function GastosContent() {
     column: "name",
   });
   const { data: cards } = useTable<Card>("cards", householdId, { column: "name" });
+  const { data: members } = useTable<HouseholdMember>("household_members", householdId);
   const {
     data: expenses,
     loading,
     refresh,
   } = useTable<Expense>("expenses", householdId, { column: "expense_date", ascending: false });
+
+  const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
 
   const [monthFilter, setMonthFilter] = useState<string>(() => {
     const now = new Date();
@@ -36,10 +39,32 @@ function GastosContent() {
   const filtered = expenses.filter((e) => e.expense_date.startsWith(monthFilter));
   const total = filtered.reduce((s, e) => s + Number(e.amount), 0);
 
+  function memberName(userId: string | null | undefined) {
+    if (!userId) return "—";
+    const member = members.find((m) => m.user_id === userId);
+    return member?.display_name || "Alguien del hogar";
+  }
+
+  function formatDateTime(iso: string) {
+    return new Date(iso).toLocaleString("es-ES", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  }
+
   async function handleDelete(id: string) {
     if (!confirm("¿Eliminar este gasto?")) return;
     await supabase.from("expenses").delete().eq("id", id);
+    if (editingExpense?.id === id) setEditingExpense(null);
     refresh();
+  }
+
+  function handleEdit(expense: Expense) {
+    setEditingExpense(expense);
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   return (
@@ -59,7 +84,12 @@ function GastosContent() {
         cards={cards}
         householdId={householdId}
         userId={session?.user.id ?? null}
-        onCreated={refresh}
+        editingExpense={editingExpense}
+        onCancelEdit={() => setEditingExpense(null)}
+        onSaved={() => {
+          setEditingExpense(null);
+          refresh();
+        }}
       />
 
       <div className="card">
@@ -83,6 +113,7 @@ function GastosContent() {
                   <th className="py-2 pr-2">Descripción</th>
                   <th className="py-2 pr-2">Categoría</th>
                   <th className="py-2 pr-2">Tarjeta</th>
+                  <th className="py-2 pr-2">Registrado</th>
                   <th className="py-2 pr-2 text-right">Monto</th>
                   <th className="py-2 pr-2"></th>
                 </tr>
@@ -91,8 +122,9 @@ function GastosContent() {
                 {filtered.map((e) => {
                   const cat = categories.find((c) => c.id === e.category_id);
                   const card = cards.find((c) => c.id === e.card_id);
+                  const wasEdited = !!e.updated_at;
                   return (
-                    <tr key={e.id} className="border-b last:border-0">
+                    <tr key={e.id} className={`border-b last:border-0 ${editingExpense?.id === e.id ? "bg-brand-50" : ""}`}>
                       <td className="py-2 pr-2 whitespace-nowrap">
                         {new Date(e.expense_date + "T00:00:00").toLocaleDateString("es-ES")}
                       </td>
@@ -113,10 +145,31 @@ function GastosContent() {
                         {cat ? `${cat.icon} ${cat.name}` : "—"}
                       </td>
                       <td className="py-2 pr-2">{card ? card.name : "—"}</td>
-                      <td className="py-2 pr-2 text-right font-medium">
+                      <td className="py-2 pr-2 text-xs text-slate-500 whitespace-nowrap">
+                        {wasEdited ? (
+                          <>
+                            ✏️ {memberName(e.updated_by)}
+                            <br />
+                            {formatDateTime(e.updated_at as string)}
+                          </>
+                        ) : (
+                          <>
+                            👤 {memberName(e.created_by)}
+                            <br />
+                            {formatDateTime(e.created_at)}
+                          </>
+                        )}
+                      </td>
+                      <td className="py-2 pr-2 text-right font-medium whitespace-nowrap">
                         {formatCurrency(Number(e.amount))}
                       </td>
-                      <td className="py-2 pr-2 text-right">
+                      <td className="py-2 pr-2 text-right whitespace-nowrap">
+                        <button
+                          onClick={() => handleEdit(e)}
+                          className="text-brand-600 hover:underline text-xs mr-3"
+                        >
+                          editar
+                        </button>
                         <button
                           onClick={() => handleDelete(e.id)}
                           className="text-red-500 hover:underline text-xs"
@@ -141,13 +194,17 @@ function ExpenseForm({
   cards,
   householdId,
   userId,
-  onCreated,
+  editingExpense,
+  onCancelEdit,
+  onSaved,
 }: {
   categories: Category[];
   cards: Card[];
   householdId: string | null;
   userId: string | null;
-  onCreated: () => void;
+  editingExpense: Expense | null;
+  onCancelEdit: () => void;
+  onSaved: () => void;
 }) {
   const [description, setDescription] = useState("");
   const [amount, setAmount] = useState("");
@@ -159,36 +216,85 @@ function ExpenseForm({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (editingExpense) {
+      setDescription(editingExpense.description);
+      setAmount(String(editingExpense.amount));
+      setCategoryId(editingExpense.category_id);
+      setCardId(editingExpense.card_id ?? "");
+      setDate(editingExpense.expense_date);
+      setIsRecurring(editingExpense.is_recurring);
+      setIsExtra(editingExpense.is_extra);
+    } else {
+      setDescription("");
+      setAmount("");
+      setCategoryId("");
+      setCardId("");
+      setDate(new Date().toISOString().slice(0, 10));
+      setIsRecurring(false);
+      setIsExtra(false);
+    }
+    setError(null);
+  }, [editingExpense]);
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!householdId || !categoryId || !amount) return;
     setSaving(true);
     setError(null);
-    const { error } = await supabase.from("expenses").insert({
-      household_id: householdId,
-      category_id: categoryId,
-      card_id: cardId || null,
-      description,
-      amount: Number(amount),
-      expense_date: date,
-      is_recurring: isRecurring,
-      is_extra: isExtra,
-      created_by: userId,
-    });
-    setSaving(false);
-    if (error) {
-      setError(error.message);
-      return;
+
+    if (editingExpense) {
+      const { error } = await supabase
+        .from("expenses")
+        .update({
+          category_id: categoryId,
+          card_id: cardId || null,
+          description,
+          amount: Number(amount),
+          expense_date: date,
+          is_recurring: isRecurring,
+          is_extra: isExtra,
+          updated_by: userId,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", editingExpense.id);
+      setSaving(false);
+      if (error) {
+        setError(error.message);
+        return;
+      }
+    } else {
+      const { error } = await supabase.from("expenses").insert({
+        household_id: householdId,
+        category_id: categoryId,
+        card_id: cardId || null,
+        description,
+        amount: Number(amount),
+        expense_date: date,
+        is_recurring: isRecurring,
+        is_extra: isExtra,
+        created_by: userId,
+      });
+      setSaving(false);
+      if (error) {
+        setError(error.message);
+        return;
+      }
     }
-    setDescription("");
-    setAmount("");
-    setIsRecurring(false);
-    setIsExtra(false);
-    onCreated();
+
+    onSaved();
   }
 
   return (
     <form onSubmit={handleSubmit} className="card grid grid-cols-1 md:grid-cols-6 gap-3 items-end">
+      {editingExpense && (
+        <div className="md:col-span-6 flex items-center justify-between bg-brand-50 text-brand-700 text-sm rounded-lg px-3 py-2">
+          <span>✏️ Editando: {editingExpense.description}</span>
+          <button type="button" onClick={onCancelEdit} className="underline">
+            Cancelar
+          </button>
+        </div>
+      )}
       <div className="md:col-span-2">
         <label className="label">Descripción</label>
         <input
@@ -265,7 +371,7 @@ function ExpenseForm({
         {error && <p className="text-sm text-red-600">{error}</p>}
 
         <button type="submit" disabled={saving} className="btn-primary ml-auto">
-          {saving ? "Guardando..." : "Agregar gasto"}
+          {saving ? "Guardando..." : editingExpense ? "Guardar cambios" : "Agregar gasto"}
         </button>
       </div>
     </form>

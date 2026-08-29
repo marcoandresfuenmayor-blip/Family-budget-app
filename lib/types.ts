@@ -69,3 +69,12 @@ export type Expense = {
   is_recurring: boolean;
   is_extra: boolean;
 };
+
+export type SavingsGoal = {
+  id: string;
+  household_id: string;
+  name: string;
+  target_amount: number;
+  target_date: string | null;
+  created_at: string;
+};

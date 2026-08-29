@@ -5,11 +5,11 @@ import { usePathname } from "next/navigation";
 import { useHousehold } from "@/lib/HouseholdContext";
 
 const links = [
-  { href: "/", label: "Dashboard" },
-  { href: "/gastos", label: "Gastos" },
-  { href: "/ingresos", label: "Ingresos" },
-  { href: "/tarjetas", label: "Tarjetas" },
-  { href: "/categorias", label: "Categorías y límites" },
+  { href: "/", label: "📊 Dashboard" },
+  { href: "/gastos", label: "🧾 Gastos" },
+  { href: "/ingresos", label: "💵 Ingresos" },
+  { href: "/tarjetas", label: "💳 Tarjetas" },
+  { href: "/categorias", label: "🏷️ Categorías y límites" },
 ];
 
 export default function Nav() {
@@ -19,19 +19,21 @@ export default function Nav() {
   if (!session) return null;
 
   return (
-    <header className="bg-white border-b border-slate-200">
+    <header className="bg-brand-gradient shadow-md">
       <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-6 flex-wrap">
-          <span className="font-semibold text-brand-700">💰 Finanzas Familiares</span>
+          <span className="font-heading font-bold text-white text-lg drop-shadow-sm">
+            💰 Finanzas Familiares
+          </span>
           <nav className="flex gap-1 flex-wrap">
             {links.map((link) => (
               <Link
                 key={link.href}
                 href={link.href}
-                className={`px-3 py-1.5 rounded-lg text-sm font-medium ${
+                className={`px-3 py-1.5 rounded-xl text-sm font-medium transition-colors ${
                   pathname === link.href
-                    ? "bg-brand-50 text-brand-700"
-                    : "text-slate-600 hover:bg-slate-100"
+                    ? "bg-white text-brand-700 shadow-sm"
+                    : "text-white/85 hover:bg-white/15"
                 }`}
               >
                 {link.label}
@@ -40,8 +42,11 @@ export default function Nav() {
           </nav>
         </div>
         <div className="flex items-center gap-3 text-sm">
-          <span className="text-slate-500">{displayName ?? session.user.email}</span>
-          <button onClick={signOut} className="btn-secondary !px-3 !py-1.5">
+          <span className="text-white/85">👤 {displayName ?? session.user.email}</span>
+          <button
+            onClick={signOut}
+            className="bg-white/15 hover:bg-white/25 text-white font-medium px-3 py-1.5 rounded-xl transition-colors"
+          >
             Salir
           </button>
         </div>

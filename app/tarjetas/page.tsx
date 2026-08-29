@@ -5,8 +5,8 @@ import AuthGuard from "@/components/AuthGuard";
 import { useHousehold } from "@/lib/HouseholdContext";
 import { useTable } from "@/lib/hooks";
 import { supabase } from "@/lib/supabaseClient";
-import { Card } from "@/lib/types";
-import { formatCurrency, nextOccurrence } from "@/lib/utils";
+import { Card, Expense } from "@/lib/types";
+import { cardCycleSpend, formatCurrency, nextOccurrence } from "@/lib/utils";
 
 export default function TarjetasPage() {
   return (
@@ -21,6 +21,7 @@ function TarjetasContent() {
   const { data: cards, loading, refresh } = useTable<Card>("cards", householdId, {
     column: "name",
   });
+  const { data: expenses } = useTable<Expense>("expenses", householdId);
 
   const [name, setName] = useState("");
   const [closingDay, setClosingDay] = useState("15");
@@ -59,7 +60,7 @@ function TarjetasContent() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-xl font-semibold">Tarjetas de crédito</h1>
+      <h1 className="text-2xl font-bold">💳 Tarjetas de crédito</h1>
 
       <form onSubmit={handleSubmit} className="card grid grid-cols-1 md:grid-cols-5 gap-3 items-end">
         <div>
@@ -95,24 +96,67 @@ function TarjetasContent() {
           cards.map((card) => {
             const closing = nextOccurrence(card.closing_day);
             const payment = nextOccurrence(card.payment_day);
+            const cycleSpend = cardCycleSpend(expenses, card.id, card.closing_day);
+            const utilizationPct = card.credit_limit
+              ? Math.min((cycleSpend / Number(card.credit_limit)) * 100, 999)
+              : null;
+            const pillColor =
+              utilizationPct === null
+                ? "bg-slate-100 text-slate-600"
+                : utilizationPct >= 70
+                ? "bg-red-100 text-red-700"
+                : utilizationPct >= 30
+                ? "bg-amber-100 text-amber-700"
+                : "bg-emerald-100 text-emerald-700";
+            const barColor =
+              utilizationPct === null
+                ? "bg-slate-300"
+                : utilizationPct >= 70
+                ? "bg-red-500"
+                : utilizationPct >= 30
+                ? "bg-amber-500"
+                : "bg-emerald-500";
             return (
               <div key={card.id} className="card">
                 <div className="flex items-center justify-between mb-3">
-                  <h3 className="font-semibold">{card.name}</h3>
-                  <button
-                    onClick={() => handleDelete(card.id)}
-                    className="text-red-500 hover:underline text-xs"
-                  >
-                    eliminar
-                  </button>
+                  <h3 className="font-semibold">💳 {card.name}</h3>
+                  <div className="flex items-center gap-2">
+                    {utilizationPct !== null && (
+                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${pillColor}`}>
+                        {utilizationPct.toFixed(0)}% del límite
+                      </span>
+                    )}
+                    <button
+                      onClick={() => handleDelete(card.id)}
+                      className="text-red-500 hover:underline text-xs"
+                    >
+                      eliminar
+                    </button>
+                  </div>
                 </div>
+
+                <div className="bg-slate-50 rounded-xl p-3 mb-3">
+                  <div className="flex items-center justify-between text-sm mb-1">
+                    <span className="text-slate-500">Saldo de este corte</span>
+                    <span className="font-semibold text-slate-800">{formatCurrency(cycleSpend)}</span>
+                  </div>
+                  {card.credit_limit && (
+                    <div className="w-full bg-slate-200 rounded-full h-2">
+                      <div
+                        className={`h-2 rounded-full ${barColor}`}
+                        style={{ width: `${Math.min(utilizationPct ?? 0, 100)}%` }}
+                      />
+                    </div>
+                  )}
+                </div>
+
                 <div className="text-sm space-y-1 text-slate-600">
                   <p>
                     📅 Próximo corte: <strong>{closing.toLocaleDateString("es-ES")}</strong> (día{" "}
                     {card.closing_day})
                   </p>
                   <p>
-                    💵 Próximo pago: <strong>{payment.toLocaleDateString("es-ES")}</strong> (día{" "}
+                    💵 Fecha de pago: <strong>{payment.toLocaleDateString("es-ES")}</strong> (día{" "}
                     {card.payment_day})
                   </p>
                   {card.credit_limit && (

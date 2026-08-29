@@ -72,6 +72,26 @@ Abre http://localhost:3000
    - Recomendaciones automáticas para reducir gastos discrecionales e impulsar el ahorro hacia
      nuevos proyectos familiares.
 
+## 3.1 Activar mejoras v2 (ingresos automáticos, tarjetas y metas)
+
+Si ya tenías la app corriendo y quieres agregar: auto-registro de ingresos recurrentes, el
+resumen de saldo/utilización de tarjetas, y las metas de ahorro familiares, corre esta migración
+adicional (no borra nada de lo que ya tienes):
+
+1. Ve a Supabase → **SQL Editor → New query**.
+2. Abre [`supabase/migration_v2_mejoras.sql`](./supabase/migration_v2_mejoras.sql), copia todo su
+   contenido, pégalo y dale **Run**.
+3. Si la línea `create extension if not exists pg_cron ...` da error de permisos, ve a
+   **Database → Extensions**, busca "pg_cron" y actívala con el switch. Luego vuelve al SQL
+   Editor y corre solo el resto del script (desde `select cron.unschedule...` en adelante).
+4. Listo. Desde ese momento, todos los días a las 8:00 AM (hora UTC) la base de datos revisa tus
+   ingresos recurrentes activos y, si hoy es su día de pago, registra el ingreso solo — ya no
+   necesitas darle a "Marcar recibido" a mano (aunque el botón sigue ahí por si quieres
+   adelantarlo o corregirlo).
+5. Ve al Dashboard: ahí aparece la nueva sección de **Tarjetas** con el saldo del corte y % de uso
+   del límite, y la de **Metas de ahorro**, donde puedes crear un proyecto familiar y ver tu
+   progreso calculado automáticamente según tu ahorro real del mes.
+
 ## 4. Desplegar en la nube (para que ambos la usen desde el celular)
 
 La forma más simple y gratuita es con [Vercel](https://vercel.com):

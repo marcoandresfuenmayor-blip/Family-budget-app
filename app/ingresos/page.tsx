@@ -39,18 +39,43 @@ function IngresosContent() {
   const filtered = entries.filter((e) => e.entry_date.startsWith(monthFilter));
   const total = filtered.reduce((s, e) => s + Number(e.amount), 0);
 
+  async function markReceived(source: IncomeSource) {
+    if (!householdId) return;
+    const today = new Date().toISOString().slice(0, 10);
+    const monthLabel = new Date().toLocaleDateString("es-ES", { month: "long", year: "numeric" });
+    await supabase.from("income_entries").insert({
+      household_id: householdId,
+      income_source_id: source.id,
+      description: `${source.name} (${monthLabel})`,
+      amount: source.amount,
+      entry_date: today,
+      is_extra: false,
+      created_by: session?.user.id ?? null,
+    });
+    refreshEntries();
+  }
+
   return (
     <div className="space-y-6">
-      <h1 className="text-xl font-semibold">Ingresos</h1>
+      <h1 className="text-2xl font-bold">💵 Ingresos</h1>
+
+      <div className="card bg-sky-50 border-sky-200 text-sky-900 text-sm">
+        💡 <strong>¿Cómo funciona esto?</strong> Los "ingresos recurrentes" de abajo son solo una
+        plantilla para que la app te avise cuándo esperar cada sueldo — por sí solos no cuentan en
+        el dashboard. Cuando el ingreso llegue de verdad, dale al botón{" "}
+        <strong>"✅ Marcar recibido"</strong> (o regístralo manualmente abajo) para que sí sume en
+        tus totales y gráficos.
+      </div>
 
       <IncomeSourceManager
         sources={sources}
         householdId={householdId}
         onChange={refreshSources}
+        onMarkReceived={markReceived}
       />
 
       <div className="card">
-        <h2 className="font-semibold mb-3">Registrar ingreso</h2>
+        <h2 className="font-semibold mb-3">✍️ Registrar ingreso</h2>
         <IncomeEntryForm
           sources={sources}
           householdId={householdId}
@@ -61,7 +86,7 @@ function IngresosContent() {
 
       <div className="card">
         <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
-          <h2 className="font-semibold">Historial de ingresos</h2>
+          <h2 className="font-semibold">📜 Historial de ingresos</h2>
           <div className="flex items-center gap-3">
             <input
               type="month"
@@ -117,10 +142,12 @@ function IncomeSourceManager({
   sources,
   householdId,
   onChange,
+  onMarkReceived,
 }: {
   sources: IncomeSource[];
   householdId: string | null;
   onChange: () => void;
+  onMarkReceived: (source: IncomeSource) => void;
 }) {
   const [name, setName] = useState("");
   const [amount, setAmount] = useState("");
@@ -159,7 +186,7 @@ function IncomeSourceManager({
 
   return (
     <div className="card">
-      <h2 className="font-semibold mb-3">Ingresos recurrentes (sueldos, etc.)</h2>
+      <h2 className="font-semibold mb-3">🔁 Ingresos recurrentes (sueldos, etc.)</h2>
 
       <form onSubmit={addSource} className="grid grid-cols-1 md:grid-cols-5 gap-3 items-end mb-4">
         <div className="md:col-span-2">
@@ -195,6 +222,7 @@ function IncomeSourceManager({
               <th className="py-2 pr-2 text-right">Monto</th>
               <th className="py-2 pr-2"></th>
               <th className="py-2 pr-2"></th>
+              <th className="py-2 pr-2"></th>
             </tr>
           </thead>
           <tbody>
@@ -207,6 +235,14 @@ function IncomeSourceManager({
                 <td className="py-2 pr-2">
                   <button onClick={() => toggleActive(s)} className="text-xs text-brand-600 hover:underline">
                     {s.active ? "activo" : "inactivo"}
+                  </button>
+                </td>
+                <td className="py-2 pr-2">
+                  <button
+                    onClick={() => onMarkReceived(s)}
+                    className="text-xs bg-emerald-100 text-emerald-700 hover:bg-emerald-200 px-2 py-1 rounded-lg font-medium whitespace-nowrap"
+                  >
+                    ✅ Marcar recibido
                   </button>
                 </td>
                 <td className="py-2 pr-2 text-right">

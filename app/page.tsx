@@ -18,9 +18,10 @@ import AuthGuard from "@/components/AuthGuard";
 import AlertBanner from "@/components/AlertBanner";
 import CategoryBudgetCard from "@/components/CategoryBudgetCard";
 import RecommendationsPanel from "@/components/RecommendationsPanel";
+import GoalsPanel from "@/components/GoalsPanel";
 import { useHousehold } from "@/lib/HouseholdContext";
 import { useTable } from "@/lib/hooks";
-import { Card, Category, CategoryBudget, Expense, IncomeEntry, IncomeSource } from "@/lib/types";
+import { Card, Category, CategoryBudget, Expense, IncomeEntry, IncomeSource, SavingsGoal } from "@/lib/types";
 import {
   Alert,
   buildCardAlerts,
@@ -60,6 +61,9 @@ function DashboardContent() {
   const { data: expenses } = useTable<Expense>("expenses", householdId);
   const { data: incomeSources } = useTable<IncomeSource>("income_sources", householdId);
   const { data: incomeEntries } = useTable<IncomeEntry>("income_entries", householdId);
+  const { data: goals, refresh: refreshGoals } = useTable<SavingsGoal>("savings_goals", householdId, {
+    column: "created_at",
+  });
 
   const monthExpenses = useMemo(
     () => expenses.filter((e) => isInCurrentMonth(e.expense_date)),
@@ -104,26 +108,41 @@ function DashboardContent() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-xl font-semibold">Dashboard familiar</h1>
+      <h1 className="text-2xl font-bold">📊 Dashboard familiar</h1>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <SummaryCard label="Ingresos del mes" value={totalIncome} color="text-emerald-700" />
-        <SummaryCard label="Gastos del mes" value={totalSpent} color="text-red-600" />
+        <SummaryCard
+          label="Ingresos del mes"
+          value={totalIncome}
+          emoji="💵"
+          className="bg-emerald-50 border-emerald-200 text-emerald-800"
+        />
+        <SummaryCard
+          label="Gastos del mes"
+          value={totalSpent}
+          emoji="🧾"
+          className="bg-rose-50 border-rose-200 text-rose-800"
+        />
         <SummaryCard
           label="Balance"
           value={balance}
-          color={balance >= 0 ? "text-emerald-700" : "text-red-600"}
+          emoji={balance >= 0 ? "🎉" : "⚠️"}
+          className={
+            balance >= 0
+              ? "bg-brand-50 border-brand-100 text-brand-800"
+              : "bg-amber-50 border-amber-200 text-amber-800"
+          }
         />
       </div>
 
       <div>
-        <h2 className="font-semibold mb-2">Alertas</h2>
+        <h2 className="font-semibold mb-2">🔔 Alertas</h2>
         <AlertBanner alerts={alerts} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="card">
-          <h2 className="font-semibold mb-3">Gastado vs. límite por categoría</h2>
+          <h2 className="font-semibold mb-3">📈 Gastado vs. límite por categoría</h2>
           {chartData.some((d) => d.Límite > 0 || d.Gastado > 0) ? (
             <ResponsiveContainer width="100%" height={280}>
               <BarChart data={chartData} margin={{ left: -20 }}>
@@ -142,7 +161,7 @@ function DashboardContent() {
         </div>
 
         <div className="card">
-          <h2 className="font-semibold mb-3">Distribución de gastos del mes</h2>
+          <h2 className="font-semibold mb-3">🥧 Distribución de gastos del mes</h2>
           {pieData.length > 0 ? (
             <ResponsiveContainer width="100%" height={280}>
               <PieChart>
@@ -162,7 +181,7 @@ function DashboardContent() {
       </div>
 
       <div className="card">
-        <h2 className="font-semibold mb-3">Límites por categoría</h2>
+        <h2 className="font-semibold mb-3">🎯 Límites por categoría</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
           {categories.map((c) => {
             const spent = monthExpenses
@@ -182,16 +201,36 @@ function DashboardContent() {
         </div>
       </div>
 
+      <GoalsPanel
+        goals={goals}
+        incomeEntries={incomeEntries}
+        expenses={expenses}
+        householdId={householdId}
+        onChange={refreshGoals}
+      />
+
       <RecommendationsPanel recs={recommendations} />
     </div>
   );
 }
 
-function SummaryCard({ label, value, color }: { label: string; value: number; color: string }) {
+function SummaryCard({
+  label,
+  value,
+  emoji,
+  className,
+}: {
+  label: string;
+  value: number;
+  emoji: string;
+  className: string;
+}) {
   return (
-    <div className="card">
-      <p className="text-sm text-slate-500">{label}</p>
-      <p className={`text-2xl font-semibold ${color}`}>{formatCurrency(value)}</p>
+    <div className={`card border ${className}`}>
+      <p className="text-sm opacity-80 flex items-center gap-1.5">
+        <span className="text-lg">{emoji}</span> {label}
+      </p>
+      <p className="text-2xl font-heading font-bold mt-1">{formatCurrency(value)}</p>
     </div>
   );
 }

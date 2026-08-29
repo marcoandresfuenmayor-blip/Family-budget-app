@@ -46,9 +46,9 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50 px-4">
+    <div className="min-h-screen flex items-center justify-center bg-brand-gradient px-4">
       <div className="card w-full max-w-sm">
-        <h1 className="text-xl font-semibold mb-1 text-center">💰 Finanzas Familiares</h1>
+        <h1 className="text-2xl font-heading font-bold mb-1 text-center">💰 Finanzas Familiares</h1>
         <p className="text-center text-sm text-slate-500 mb-6">
           {mode === "login" ? "Inicia sesión" : "Crea tu cuenta"}
         </p>

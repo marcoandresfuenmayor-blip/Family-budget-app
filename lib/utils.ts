@@ -1,4 +1,4 @@
-import { Card, Category, CategoryBudget, Expense, IncomeSource } from "./types";
+import { Card, Category, CategoryBudget, Expense, IncomeEntry, IncomeSource, SavingsGoal } from "./types";
 
 export function formatCurrency(value: number, currency = "USD") {
   return new Intl.NumberFormat("es-ES", {
@@ -37,6 +37,19 @@ function daysInMonth(year: number, month: number) {
 
 function stripTime(d: Date) {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+
+// La ocurrencia anterior (o de hoy, si hoy es ese día) de un día del mes.
+// Junto con nextOccurrence delimita el ciclo de facturación "abierto" de una tarjeta.
+export function previousOccurrence(day: number, base = new Date()): Date {
+  const clampedDay = Math.min(day, daysInMonth(base.getFullYear(), base.getMonth()));
+  const candidate = new Date(base.getFullYear(), base.getMonth(), clampedDay);
+  if (candidate > stripTime(base)) {
+    const prevMonth = new Date(base.getFullYear(), base.getMonth() - 1, 1);
+    const clampedPrev = Math.min(day, daysInMonth(prevMonth.getFullYear(), prevMonth.getMonth()));
+    return new Date(prevMonth.getFullYear(), prevMonth.getMonth(), clampedPrev);
+  }
+  return candidate;
 }
 
 export function daysUntil(date: Date, base = new Date()) {
@@ -250,4 +263,66 @@ export function buildRecommendations(
   }
 
   return recs;
+}
+
+// -----------------------------------------------------------------
+// TARJETAS: ciclo de facturación actual
+// -----------------------------------------------------------------
+export function cardCycleRange(closingDay: number, base = new Date()) {
+  const cycleStart = previousOccurrence(closingDay, base);
+  const cycleEnd = nextOccurrence(closingDay, base);
+  return { cycleStart, cycleEnd };
+}
+
+// Suma de gastos de una tarjeta desde el último corte hasta hoy: lo que
+// aparecerá en el próximo estado de cuenta.
+export function cardCycleSpend(expenses: Expense[], cardId: string, closingDay: number, base = new Date()) {
+  const { cycleStart } = cardCycleRange(closingDay, base);
+  return expenses
+    .filter((e) => e.card_id === cardId)
+    .filter((e) => {
+      const d = new Date(e.expense_date + "T00:00:00");
+      return d > cycleStart && d <= base;
+    })
+    .reduce((sum, e) => sum + Number(e.amount), 0);
+}
+
+// -----------------------------------------------------------------
+// METAS DE AHORRO
+// -----------------------------------------------------------------
+export type GoalProgress = {
+  saved: number;
+  pct: number;
+  monthsLeft: number | null;
+};
+
+// El "ahorro" hacia una meta se calcula como el superávit real
+// (ingresos - gastos) acumulado desde que se creó la meta, sin contar
+// más de lo que la meta pide.
+export function computeGoalProgress(
+  goal: SavingsGoal,
+  incomeEntries: IncomeEntry[],
+  expenses: Expense[],
+  base = new Date()
+): GoalProgress {
+  const since = new Date(goal.created_at);
+
+  const totalIncome = incomeEntries
+    .filter((e) => new Date(e.entry_date + "T00:00:00") >= since)
+    .reduce((sum, e) => sum + Number(e.amount), 0);
+
+  const totalExpenses = expenses
+    .filter((e) => new Date(e.expense_date + "T00:00:00") >= since)
+    .reduce((sum, e) => sum + Number(e.amount), 0);
+
+  const surplus = Math.max(0, totalIncome - totalExpenses);
+  const saved = Math.min(surplus, goal.target_amount);
+  const pct = goal.target_amount > 0 ? (saved / goal.target_amount) * 100 : 0;
+
+  const monthsElapsed = Math.max(1, (base.getTime() - since.getTime()) / (1000 * 60 * 60 * 24 * 30));
+  const monthlyRate = surplus / monthsElapsed;
+  const remaining = Math.max(0, goal.target_amount - saved);
+  const monthsLeft = monthlyRate > 0.01 ? Math.ceil(remaining / monthlyRate) : null;
+
+  return { saved, pct, monthsLeft };
 }

@@ -81,7 +81,7 @@ function HouseholdOnboarding({
   return (
     <div className="min-h-[70vh] flex items-center justify-center px-4">
       <div className="card w-full max-w-md">
-        <h2 className="text-lg font-semibold mb-1">Configura tu hogar</h2>
+        <h2 className="text-lg font-semibold mb-1">🏡 Configura tu hogar</h2>
         <p className="text-sm text-slate-500 mb-4">
           Crea un hogar nuevo o únete al de tu pareja con un código de invitación.
         </p>

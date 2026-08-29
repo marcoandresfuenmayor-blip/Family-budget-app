@@ -45,7 +45,7 @@ function GastosContent() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <h1 className="text-xl font-semibold">Gastos mensuales</h1>
+        <h1 className="text-2xl font-bold">🧾 Gastos mensuales</h1>
         <input
           type="month"
           className="input !w-auto"

@@ -5,7 +5,7 @@ import AuthGuard from "@/components/AuthGuard";
 import { useHousehold } from "@/lib/HouseholdContext";
 import { useTable } from "@/lib/hooks";
 import { supabase } from "@/lib/supabaseClient";
-import { Card, Category, Expense, HouseholdMember } from "@/lib/types";
+import { Card, Category, Expense, HouseholdMember, RecurringExpense } from "@/lib/types";
 import { formatCurrency } from "@/lib/utils";
 
 export default function GastosPage() {
@@ -23,6 +23,11 @@ function GastosContent() {
   });
   const { data: cards } = useTable<Card>("cards", householdId, { column: "name" });
   const { data: members } = useTable<HouseholdMember>("household_members", householdId);
+  const { data: recurringExpenses, refresh: refreshRecurring } = useTable<RecurringExpense>(
+    "recurring_expenses",
+    householdId,
+    { column: "day_of_month" }
+  );
   const {
     data: expenses,
     loading,
@@ -36,7 +41,38 @@ function GastosContent() {
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
   });
 
-  const filtered = expenses.filter((e) => e.expense_date.startsWith(monthFilter));
+  type SortKey = "expense_date" | "description" | "amount";
+  const [sortBy, setSortBy] = useState<SortKey>("expense_date");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+
+  function toggleSort(key: SortKey) {
+    if (sortBy === key) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortBy(key);
+      setSortDir(key === "description" ? "asc" : "desc");
+    }
+  }
+
+  function sortIndicator(key: SortKey) {
+    if (sortBy !== key) return "";
+    return sortDir === "asc" ? " ▲" : " ▼";
+  }
+
+  const filtered = expenses
+    .filter((e) => e.expense_date.startsWith(monthFilter))
+    .slice()
+    .sort((a, b) => {
+      let cmp = 0;
+      if (sortBy === "description") {
+        cmp = a.description.localeCompare(b.description, "es");
+      } else if (sortBy === "amount") {
+        cmp = Number(a.amount) - Number(b.amount);
+      } else {
+        cmp = a.expense_date.localeCompare(b.expense_date);
+      }
+      return sortDir === "asc" ? cmp : -cmp;
+    });
   const total = filtered.reduce((s, e) => s + Number(e.amount), 0);
 
   function memberName(userId: string | null | undefined) {
@@ -67,6 +103,34 @@ function GastosContent() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
+  async function registerNow(tpl: RecurringExpense) {
+    if (!householdId) return;
+    const today = new Date().toISOString().slice(0, 10);
+    const { data: existing } = await supabase
+      .from("expenses")
+      .select("id")
+      .eq("recurring_expense_id", tpl.id)
+      .gte("expense_date", today.slice(0, 7) + "-01")
+      .lte("expense_date", today.slice(0, 7) + "-31");
+    if (existing && existing.length > 0) {
+      alert("Este gasto fijo ya se registró este mes.");
+      return;
+    }
+    await supabase.from("expenses").insert({
+      household_id: householdId,
+      category_id: tpl.category_id,
+      card_id: tpl.card_id,
+      description: `${tpl.description} (automático)`,
+      amount: tpl.amount,
+      expense_date: today,
+      is_recurring: true,
+      is_extra: false,
+      recurring_expense_id: tpl.id,
+      created_by: session?.user.id ?? null,
+    });
+    refresh();
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
@@ -78,6 +142,23 @@ function GastosContent() {
           onChange={(e) => setMonthFilter(e.target.value)}
         />
       </div>
+
+      <div className="card bg-sky-50 border-sky-200 text-sky-900 text-sm">
+        💡 <strong>¿Cómo funciona esto?</strong> Los "gastos fijos recurrentes" de abajo son
+        plantillas: tú eliges cuáles se auto-repiten cada mes. Si activaste el auto-registro (ver
+        README), se registran solos el día que corresponda; si no, usa{" "}
+        <strong>"⚡ Registrar ahora"</strong>. Los gastos marcados como "fijo" en el formulario de
+        abajo NO se repiten solos — son de un solo mes, a menos que los crees como plantilla aquí.
+      </div>
+
+      <RecurringExpenseManager
+        recurringExpenses={recurringExpenses}
+        categories={categories}
+        cards={cards}
+        householdId={householdId}
+        onChange={refreshRecurring}
+        onRegisterNow={registerNow}
+      />
 
       <ExpenseForm
         categories={categories}
@@ -109,12 +190,18 @@ function GastosContent() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-slate-500 border-b">
-                  <th className="py-2 pr-2">Fecha</th>
-                  <th className="py-2 pr-2">Descripción</th>
+                  <th className="py-2 pr-2 cursor-pointer select-none hover:text-slate-700" onClick={() => toggleSort("expense_date")}>
+                    Fecha{sortIndicator("expense_date")}
+                  </th>
+                  <th className="py-2 pr-2 cursor-pointer select-none hover:text-slate-700" onClick={() => toggleSort("description")}>
+                    Descripción{sortIndicator("description")}
+                  </th>
                   <th className="py-2 pr-2">Categoría</th>
                   <th className="py-2 pr-2">Tarjeta</th>
                   <th className="py-2 pr-2">Registrado</th>
-                  <th className="py-2 pr-2 text-right">Monto</th>
+                  <th className="py-2 pr-2 text-right cursor-pointer select-none hover:text-slate-700" onClick={() => toggleSort("amount")}>
+                    Monto{sortIndicator("amount")}
+                  </th>
                   <th className="py-2 pr-2"></th>
                 </tr>
               </thead>
@@ -185,6 +272,217 @@ function GastosContent() {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+function RecurringExpenseManager({
+  recurringExpenses,
+  categories,
+  cards,
+  householdId,
+  onChange,
+  onRegisterNow,
+}: {
+  recurringExpenses: RecurringExpense[];
+  categories: Category[];
+  cards: Card[];
+  householdId: string | null;
+  onChange: () => void;
+  onRegisterNow: (tpl: RecurringExpense) => void;
+}) {
+  const [editingTpl, setEditingTpl] = useState<RecurringExpense | null>(null);
+  const [description, setDescription] = useState("");
+  const [amount, setAmount] = useState("");
+  const [categoryId, setCategoryId] = useState("");
+  const [cardId, setCardId] = useState("");
+  const [dayOfMonth, setDayOfMonth] = useState("1");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (editingTpl) {
+      setDescription(editingTpl.description);
+      setAmount(String(editingTpl.amount));
+      setCategoryId(editingTpl.category_id);
+      setCardId(editingTpl.card_id ?? "");
+      setDayOfMonth(String(editingTpl.day_of_month));
+    } else {
+      setDescription("");
+      setAmount("");
+      setCategoryId("");
+      setCardId("");
+      setDayOfMonth("1");
+    }
+  }, [editingTpl]);
+
+  async function saveTpl(e: React.FormEvent) {
+    e.preventDefault();
+    if (!householdId || !description || !amount || !categoryId) return;
+    setSaving(true);
+
+    const payload = {
+      description,
+      amount: Number(amount),
+      category_id: categoryId,
+      card_id: cardId || null,
+      day_of_month: Number(dayOfMonth),
+    };
+
+    if (editingTpl) {
+      await supabase.from("recurring_expenses").update(payload).eq("id", editingTpl.id);
+    } else {
+      await supabase.from("recurring_expenses").insert({ household_id: householdId, ...payload });
+    }
+
+    setSaving(false);
+    setEditingTpl(null);
+    onChange();
+  }
+
+  async function toggleActive(tpl: RecurringExpense) {
+    await supabase.from("recurring_expenses").update({ active: !tpl.active }).eq("id", tpl.id);
+    onChange();
+  }
+
+  async function removeTpl(id: string) {
+    if (!confirm("¿Eliminar este gasto fijo recurrente? (los gastos ya registrados no se borran)")) return;
+    await supabase.from("recurring_expenses").delete().eq("id", id);
+    if (editingTpl?.id === id) setEditingTpl(null);
+    onChange();
+  }
+
+  return (
+    <div className="card">
+      <h2 className="font-semibold mb-3">🔁 Gastos fijos recurrentes</h2>
+
+      <form onSubmit={saveTpl} className="grid grid-cols-1 md:grid-cols-6 gap-3 items-end mb-4">
+        {editingTpl && (
+          <div className="md:col-span-6 flex items-center justify-between bg-brand-50 text-brand-700 text-sm rounded-lg px-3 py-2">
+            <span>✏️ Editando: {editingTpl.description}</span>
+            <button type="button" onClick={() => setEditingTpl(null)} className="underline">
+              Cancelar
+            </button>
+          </div>
+        )}
+        <div className="md:col-span-2">
+          <label className="label">Descripción</label>
+          <input
+            className="input"
+            required
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="Ej. Arriendo"
+          />
+        </div>
+        <div>
+          <label className="label">Monto</label>
+          <input
+            className="input"
+            required
+            type="number"
+            min="0"
+            step="0.01"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+          />
+        </div>
+        <div>
+          <label className="label">Categoría</label>
+          <select className="input" required value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
+            <option value="">Selecciona</option>
+            {categories.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.icon} {c.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="label">Tarjeta (opcional)</label>
+          <select className="input" value={cardId} onChange={(e) => setCardId(e.target.value)}>
+            <option value="">Ninguna / efectivo</option>
+            {cards.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="label">Día del mes</label>
+          <input
+            className="input"
+            type="number"
+            min="1"
+            max="31"
+            value={dayOfMonth}
+            onChange={(e) => setDayOfMonth(e.target.value)}
+          />
+        </div>
+        <div className="md:col-span-6">
+          <button type="submit" disabled={saving} className="btn-primary">
+            {saving ? "Guardando..." : editingTpl ? "Guardar cambios" : "Agregar gasto fijo"}
+          </button>
+        </div>
+      </form>
+
+      {recurringExpenses.length > 0 && (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-slate-500 border-b">
+                <th className="py-2 pr-2">Descripción</th>
+                <th className="py-2 pr-2">Categoría</th>
+                <th className="py-2 pr-2">Tarjeta</th>
+                <th className="py-2 pr-2">Día</th>
+                <th className="py-2 pr-2 text-right">Monto</th>
+                <th className="py-2 pr-2"></th>
+                <th className="py-2 pr-2"></th>
+                <th className="py-2 pr-2"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {recurringExpenses.map((tpl) => {
+                const cat = categories.find((c) => c.id === tpl.category_id);
+                const card = cards.find((c) => c.id === tpl.card_id);
+                return (
+                  <tr key={tpl.id} className={`border-b last:border-0 ${editingTpl?.id === tpl.id ? "bg-brand-50" : ""}`}>
+                    <td className="py-2 pr-2">{tpl.description}</td>
+                    <td className="py-2 pr-2">{cat ? `${cat.icon} ${cat.name}` : "—"}</td>
+                    <td className="py-2 pr-2">{card ? card.name : "—"}</td>
+                    <td className="py-2 pr-2">{tpl.day_of_month}</td>
+                    <td className="py-2 pr-2 text-right">{formatCurrency(Number(tpl.amount))}</td>
+                    <td className="py-2 pr-2">
+                      <button onClick={() => toggleActive(tpl)} className="text-xs text-brand-600 hover:underline">
+                        {tpl.active ? "activo" : "inactivo"}
+                      </button>
+                    </td>
+                    <td className="py-2 pr-2">
+                      <button
+                        onClick={() => onRegisterNow(tpl)}
+                        className="text-xs bg-emerald-100 text-emerald-700 hover:bg-emerald-200 px-2 py-1 rounded-lg font-medium whitespace-nowrap"
+                      >
+                        ⚡ Registrar ahora
+                      </button>
+                    </td>
+                    <td className="py-2 pr-2 text-right whitespace-nowrap">
+                      <button
+                        onClick={() => setEditingTpl(tpl)}
+                        className="text-brand-600 hover:underline text-xs mr-3"
+                      >
+                        editar
+                      </button>
+                      <button onClick={() => removeTpl(tpl.id)} className="text-red-500 hover:underline text-xs">
+                        eliminar
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }

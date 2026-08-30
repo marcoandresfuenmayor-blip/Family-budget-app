@@ -74,6 +74,17 @@ export type Expense = {
   updated_at?: string | null;
 };
 
+export type RecurringExpense = {
+  id: string;
+  household_id: string;
+  category_id: string;
+  card_id: string | null;
+  description: string;
+  amount: number;
+  day_of_month: number;
+  active: boolean;
+};
+
 export type SavingsGoal = {
   id: string;
   household_id: string;

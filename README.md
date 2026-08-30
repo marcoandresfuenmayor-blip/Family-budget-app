@@ -103,6 +103,26 @@ cargados y ver qué persona del hogar registró o modificó cada uno:
 3. Listo. En la sección de Gastos ahora hay un botón **"editar"** junto a "eliminar" en cada
    fila, y una columna que muestra quién lo registró (o editó) y cuándo.
 
+## 3.3 Activar mejoras v4 (gastos fijos que se registran solos)
+
+Corre esta migración adicional (aditiva, no borra nada) para poder crear "plantillas" de gastos
+fijos (arriendo, suscripciones, cuotas, etc.) que se registren solas cada mes, igual que ya pasa
+con los ingresos recurrentes:
+
+1. Ve a Supabase → **SQL Editor → New query**.
+2. Abre [`supabase/migration_v4_gastos_recurrentes.sql`](./supabase/migration_v4_gastos_recurrentes.sql),
+   copia su contenido y dale **Run**.
+3. Listo. En la sección de **Gastos** ahora hay un bloque **"🔁 Gastos fijos recurrentes"** donde
+   puedes crear una plantilla (descripción, monto, categoría, tarjeta opcional y día del mes).
+4. Si activaste `pg_cron` (ver sección 3.1), esa plantilla se registra sola cada mes, el día que
+   indicaste, sin duplicarse. Si no quieres esperar al cron, usa el botón
+   **"⚡ Registrar ahora"** en la misma fila para cargar el gasto del mes actual al instante.
+
+**Importante — es "mixto" a propósito:** el check "Gasto fijo mensual" que ya existía en el
+formulario normal de Gastos (el de abajo) sigue siendo solo una etiqueta informativa para ESE
+gasto puntual — no lo repite solo. Solo los gastos que crees como **plantilla** en este nuevo
+bloque se auto-repiten mes a mes. Así decides tú, gasto por gasto, cuáles quieres automatizar.
+
 ## 4. Desplegar en la nube (para que ambos la usen desde el celular)
 
 La forma más simple y gratuita es con [Vercel](https://vercel.com):

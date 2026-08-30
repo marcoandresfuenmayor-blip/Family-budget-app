@@ -6,7 +6,7 @@ import { useHousehold } from "@/lib/HouseholdContext";
 import { useTable } from "@/lib/hooks";
 import { supabase } from "@/lib/supabaseClient";
 import { Card, Expense } from "@/lib/types";
-import { cardCycleSpend, formatCurrency, nextOccurrence } from "@/lib/utils";
+import { cardCycleSpend, cardClosedCycleDue, formatCurrency, nextOccurrence } from "@/lib/utils";
 
 export default function TarjetasPage() {
   return (
@@ -126,8 +126,9 @@ function TarjetasContent() {
             const closing = nextOccurrence(card.closing_day);
             const payment = nextOccurrence(card.payment_day);
             const cycleSpend = cardCycleSpend(expenses, card.id, card.closing_day);
+            const closedDue = cardClosedCycleDue(expenses, card.id, card.closing_day);
             const utilizationPct = card.credit_limit
-              ? Math.min((cycleSpend / Number(card.credit_limit)) * 100, 999)
+              ? Math.min(((cycleSpend + closedDue) / Number(card.credit_limit)) * 100, 999)
               : null;
             const pillColor =
               utilizationPct === null
@@ -173,11 +174,26 @@ function TarjetasContent() {
                   </div>
                 </div>
 
+                <div className="bg-amber-50 border border-amber-100 rounded-xl p-3 mb-2">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-amber-800">
+                      💰 Por pagar el <strong>{payment.toLocaleDateString("es-ES")}</strong>
+                    </span>
+                    <span className="font-bold text-amber-900">{formatCurrency(closedDue)}</span>
+                  </div>
+                </div>
+
                 <div className="bg-slate-50 rounded-xl p-3 mb-3">
                   <div className="flex items-center justify-between text-sm mb-1">
-                    <span className="text-slate-500">Saldo de este corte</span>
+                    <span className="text-slate-500">
+                      📈 Acumulado del corte que cierra el {closing.toLocaleDateString("es-ES")}
+                    </span>
                     <span className="font-semibold text-slate-800">{formatCurrency(cycleSpend)}</span>
                   </div>
+                  <p className="text-xs text-slate-400 mb-1">
+                    Los gastos hechos después del último corte pasan aquí automáticamente — se
+                    pagarán un mes después, no en el pago del {payment.toLocaleDateString("es-ES")}.
+                  </p>
                   {card.credit_limit && (
                     <div className="w-full bg-slate-200 rounded-full h-2">
                       <div
@@ -192,10 +208,6 @@ function TarjetasContent() {
                   <p>
                     📅 Próximo corte: <strong>{closing.toLocaleDateString("es-ES")}</strong> (día{" "}
                     {card.closing_day})
-                  </p>
-                  <p>
-                    💵 Fecha de pago: <strong>{payment.toLocaleDateString("es-ES")}</strong> (día{" "}
-                    {card.payment_day})
                   </p>
                   {card.credit_limit && (
                     <p>🧾 Límite de crédito: {formatCurrency(Number(card.credit_limit))}</p>

@@ -128,6 +128,13 @@ export default function GoalsPanel({
           fondo de emergencia) y la app calculará tu progreso solo, según lo que ahorres cada mes.
         </p>
       ) : (
+        <p className="text-xs text-slate-400 mb-3">
+          ℹ️ El monto ahorrado es un <strong>estimado automático</strong> (ingresos − gastos
+          registrados desde que creaste la meta) — no es una transferencia real, es una forma de
+          ver cuánto podrías haber apartado a este ritmo.
+        </p>
+      )}
+      {goals.length > 0 && (
         <div className="space-y-4">
           {goals.map((goal) => {
             const { saved, pct, monthsLeft } = computeGoalProgress(goal, incomeEntries, expenses);

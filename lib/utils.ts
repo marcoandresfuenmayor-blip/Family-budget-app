@@ -307,8 +307,8 @@ export function cardCycleRange(closingDay: number, base = new Date()) {
   return { cycleStart, cycleEnd };
 }
 
-// Suma de gastos de una tarjeta desde el último corte hasta hoy: lo que
-// aparecerá en el próximo estado de cuenta.
+// Suma de gastos de una tarjeta desde el último corte hasta hoy: lo que se
+// va acumulando para el corte que todavía está abierto (aún no se cobra).
 export function cardCycleSpend(expenses: Expense[], cardId: string, closingDay: number, base = new Date()) {
   const { cycleStart } = cardCycleRange(closingDay, base);
   return expenses
@@ -316,6 +316,25 @@ export function cardCycleSpend(expenses: Expense[], cardId: string, closingDay: 
     .filter((e) => {
       const d = new Date(e.expense_date + "T00:00:00");
       return d > cycleStart && d <= base;
+    })
+    .reduce((sum, e) => sum + Number(e.amount), 0);
+}
+
+// Suma de gastos del corte YA CERRADO (el ciclo anterior al actual): esto es
+// lo que realmente toca pagar en la próxima fecha de pago. Un gasto hecho
+// después del último corte no entra aquí — pasa automáticamente al corte
+// siguiente (cardCycleSpend), que se pagará un mes después.
+export function cardClosedCycleDue(expenses: Expense[], cardId: string, closingDay: number, base = new Date()) {
+  const { cycleStart: lastClosing } = cardCycleRange(closingDay, base);
+  const dayBefore = new Date(lastClosing);
+  dayBefore.setDate(dayBefore.getDate() - 1);
+  const priorClosing = previousOccurrence(closingDay, dayBefore);
+
+  return expenses
+    .filter((e) => e.card_id === cardId)
+    .filter((e) => {
+      const d = new Date(e.expense_date + "T00:00:00");
+      return d > priorClosing && d <= lastClosing;
     })
     .reduce((sum, e) => sum + Number(e.amount), 0);
 }

@@ -16,7 +16,7 @@ import {
 } from "recharts";
 import AuthGuard from "@/components/AuthGuard";
 import AlertBanner from "@/components/AlertBanner";
-import CategoryBudgetCard from "@/components/CategoryBudgetCard";
+import CategoryDrilldown from "@/components/CategoryDrilldown";
 import RecommendationsPanel from "@/components/RecommendationsPanel";
 import GoalsPanel from "@/components/GoalsPanel";
 import { useHousehold } from "@/lib/HouseholdContext";
@@ -225,32 +225,50 @@ function DashboardContent() {
         <div className="card">
           <h2 className="font-semibold mb-3">🥧 Distribución de gastos del mes</h2>
           {pieData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={300}>
-              <PieChart>
-                <Pie
-                  data={pieData}
-                  dataKey="Gastado"
-                  nameKey="name"
-                  outerRadius={100}
-                  label={(entry) => `${entry.pct.toFixed(0)}%`}
-                >
-                  {pieData.map((_, i) => (
-                    <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip
-                  formatter={(value: number, name: string, props: any) => [
-                    `${formatCurrency(value)} (${props.payload.pct.toFixed(0)}%)`,
-                    name,
-                  ]}
-                />
-                <Legend
-                  formatter={(value, entry: any) =>
-                    `${value} — ${entry.payload.pct.toFixed(0)}%`
-                  }
-                />
-              </PieChart>
-            </ResponsiveContainer>
+            <>
+              <ResponsiveContainer width="100%" height={260}>
+                <PieChart>
+                  <Pie
+                    data={pieData}
+                    dataKey="Gastado"
+                    nameKey="name"
+                    outerRadius={100}
+                    label={(entry) => (entry.pct >= 6 ? `${entry.pct.toFixed(0)}%` : "")}
+                    labelLine={false}
+                  >
+                    {pieData.map((_, i) => (
+                      <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip
+                    formatter={(value: number, name: string, props: any) => [
+                      `${formatCurrency(value)} (${props.payload.pct.toFixed(0)}%)`,
+                      name,
+                    ]}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+
+              {/* Leyenda propia en grilla: evita el solapamiento de la leyenda nativa de recharts */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-3 gap-y-1.5 mt-2">
+                {pieData
+                  .slice()
+                  .sort((a, b) => b.pct - a.pct)
+                  .map((d) => {
+                    const colorIndex = pieData.findIndex((p) => p.name === d.name);
+                    return (
+                      <div key={d.name} className="flex items-center gap-1.5 text-xs text-slate-600 min-w-0">
+                        <span
+                          className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                          style={{ backgroundColor: PIE_COLORS[colorIndex % PIE_COLORS.length] }}
+                        />
+                        <span className="truncate">{d.name}</span>
+                        <span className="text-slate-400 flex-shrink-0">{d.pct.toFixed(0)}%</span>
+                      </div>
+                    );
+                  })}
+              </div>
+            </>
           ) : (
             <p className="text-sm text-slate-500">Registra gastos para ver la distribución.</p>
           )}
@@ -258,24 +276,9 @@ function DashboardContent() {
       </div>
 
       <div className="card">
-        <h2 className="font-semibold mb-3">🎯 Límites por categoría</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-          {categories.map((c) => {
-            const spent = monthExpenses
-              .filter((e) => e.category_id === c.id)
-              .reduce((s, e) => s + Number(e.amount), 0);
-            const budget = budgets.find((b) => b.category_id === c.id);
-            return (
-              <CategoryBudgetCard
-                key={c.id}
-                icon={c.icon}
-                name={c.name}
-                spent={spent}
-                limit={budget?.monthly_limit ?? 0}
-              />
-            );
-          })}
-        </div>
+        <h2 className="font-semibold mb-1">🎯 Límites por categoría</h2>
+        <p className="text-xs text-slate-400 mb-3">Haz clic en una categoría para ver el detalle de sus gastos del mes.</p>
+        <CategoryDrilldown categories={categories} budgets={budgets} monthExpenses={monthExpenses} cards={cards} />
       </div>
 
       <GoalsPanel

@@ -164,23 +164,6 @@ function GastosContent() {
         />
       </div>
 
-      <div className="card bg-sky-50 border-sky-200 text-sky-900 text-sm">
-        💡 <strong>¿Cómo funciona esto?</strong> Los "gastos fijos recurrentes" de abajo son
-        plantillas: tú eliges cuáles se auto-repiten cada mes. Si activaste el auto-registro (ver
-        README), se registran solos el día que corresponda; si no, usa{" "}
-        <strong>"⚡ Registrar ahora"</strong>. Los gastos marcados como "fijo" en el formulario de
-        abajo NO se repiten solos — son de un solo mes, a menos que los crees como plantilla aquí.
-      </div>
-
-      <RecurringExpenseManager
-        recurringExpenses={recurringExpenses}
-        categories={categories}
-        cards={cards}
-        householdId={householdId}
-        onChange={refreshRecurring}
-        onRegisterNow={registerNow}
-      />
-
       <ExpenseForm
         categories={categories}
         cards={cards}
@@ -304,6 +287,23 @@ function GastosContent() {
           </div>
         )}
       </div>
+
+      <div className="card bg-sky-50 border-sky-200 text-sky-900 text-sm">
+        💡 <strong>¿Cómo funciona esto?</strong> Los "gastos fijos recurrentes" de abajo son
+        plantillas: tú eliges cuáles se auto-repiten cada mes. Si activaste el auto-registro (ver
+        README), se registran solos el día que corresponda; si no, usa{" "}
+        <strong>"⚡ Registrar ahora"</strong>. Los gastos marcados como "fijo" en el formulario de
+        arriba NO se repiten solos — son de un solo mes, a menos que los crees como plantilla aquí.
+      </div>
+
+      <RecurringExpenseManager
+        recurringExpenses={recurringExpenses}
+        categories={categories}
+        cards={cards}
+        householdId={householdId}
+        onChange={refreshRecurring}
+        onRegisterNow={registerNow}
+      />
     </div>
   );
 }
@@ -330,6 +330,56 @@ function RecurringExpenseManager({
   const [cardId, setCardId] = useState("");
   const [dayOfMonth, setDayOfMonth] = useState("1");
   const [saving, setSaving] = useState(false);
+
+  type TplSortKey = "description" | "category" | "card" | "day_of_month" | "amount";
+  const [tplSortBy, setTplSortBy] = useState<TplSortKey>("day_of_month");
+  const [tplSortDir, setTplSortDir] = useState<"asc" | "desc">("asc");
+  const TPL_ASC_DEFAULT: TplSortKey[] = ["description", "category", "card", "day_of_month"];
+
+  function toggleTplSort(key: TplSortKey) {
+    if (tplSortBy === key) {
+      setTplSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setTplSortBy(key);
+      setTplSortDir(TPL_ASC_DEFAULT.includes(key) ? "asc" : "desc");
+    }
+  }
+
+  function tplSortIndicator(key: TplSortKey) {
+    if (tplSortBy !== key) return "";
+    return tplSortDir === "asc" ? " ▲" : " ▼";
+  }
+
+  function tplCategoryName(id: string) {
+    return categories.find((c) => c.id === id)?.name ?? "";
+  }
+
+  function tplCardName(id: string | null) {
+    return cards.find((c) => c.id === id)?.name ?? "";
+  }
+
+  const sortedTpls = recurringExpenses
+    .slice()
+    .sort((a, b) => {
+      let cmp = 0;
+      if (tplSortBy === "description") {
+        cmp = a.description.localeCompare(b.description, "es");
+      } else if (tplSortBy === "category") {
+        cmp = tplCategoryName(a.category_id).localeCompare(tplCategoryName(b.category_id), "es");
+      } else if (tplSortBy === "card") {
+        cmp = tplCardName(a.card_id).localeCompare(tplCardName(b.card_id), "es");
+      } else if (tplSortBy === "amount") {
+        cmp = Number(a.amount) - Number(b.amount);
+      } else {
+        cmp = a.day_of_month - b.day_of_month;
+      }
+      return tplSortDir === "asc" ? cmp : -cmp;
+    });
+
+  const activeTotal = recurringExpenses
+    .filter((t) => t.active)
+    .reduce((s, t) => s + Number(t.amount), 0);
+  const activeCount = recurringExpenses.filter((t) => t.active).length;
 
   useEffect(() => {
     if (editingTpl) {
@@ -385,7 +435,17 @@ function RecurringExpenseManager({
 
   return (
     <div className="card">
-      <h2 className="font-semibold mb-3">🔁 Gastos fijos recurrentes</h2>
+      <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+        <h2 className="font-semibold">
+          🔁 Gastos fijos recurrentes{" "}
+          <span className="text-slate-400 font-normal">
+            ({activeCount} activo{activeCount === 1 ? "" : "s"})
+          </span>
+        </h2>
+        <span className="font-semibold text-brand-700">
+          Total fijos activos: {formatCurrency(activeTotal)}
+        </span>
+      </div>
 
       <form onSubmit={saveTpl} className="grid grid-cols-1 md:grid-cols-6 gap-3 items-end mb-4">
         {editingTpl && (
@@ -463,18 +523,28 @@ function RecurringExpenseManager({
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-slate-500 border-b">
-                <th className="py-2 pr-2">Descripción</th>
-                <th className="py-2 pr-2">Categoría</th>
-                <th className="py-2 pr-2">Tarjeta</th>
-                <th className="py-2 pr-2">Día</th>
-                <th className="py-2 pr-2 text-right">Monto</th>
+                <th className="py-2 pr-2 cursor-pointer select-none hover:text-slate-700" onClick={() => toggleTplSort("description")}>
+                  Descripción{tplSortIndicator("description")}
+                </th>
+                <th className="py-2 pr-2 cursor-pointer select-none hover:text-slate-700" onClick={() => toggleTplSort("category")}>
+                  Categoría{tplSortIndicator("category")}
+                </th>
+                <th className="py-2 pr-2 cursor-pointer select-none hover:text-slate-700" onClick={() => toggleTplSort("card")}>
+                  Tarjeta{tplSortIndicator("card")}
+                </th>
+                <th className="py-2 pr-2 cursor-pointer select-none hover:text-slate-700" onClick={() => toggleTplSort("day_of_month")}>
+                  Día{tplSortIndicator("day_of_month")}
+                </th>
+                <th className="py-2 pr-2 text-right cursor-pointer select-none hover:text-slate-700" onClick={() => toggleTplSort("amount")}>
+                  Monto{tplSortIndicator("amount")}
+                </th>
                 <th className="py-2 pr-2"></th>
                 <th className="py-2 pr-2"></th>
                 <th className="py-2 pr-2"></th>
               </tr>
             </thead>
             <tbody>
-              {recurringExpenses.map((tpl) => {
+              {sortedTpls.map((tpl) => {
                 const cat = categories.find((c) => c.id === tpl.category_id);
                 const card = cards.find((c) => c.id === tpl.card_id);
                 return (

@@ -5,7 +5,7 @@ import AuthGuard from "@/components/AuthGuard";
 import { useHousehold } from "@/lib/HouseholdContext";
 import { useTable } from "@/lib/hooks";
 import { supabase } from "@/lib/supabaseClient";
-import { Card, Expense } from "@/lib/types";
+import { Card, Category, Expense } from "@/lib/types";
 import { cardCycleSpend, cardClosedCycleDue, formatCurrency, nextOccurrence } from "@/lib/utils";
 
 export default function TarjetasPage() {
@@ -22,12 +22,15 @@ function TarjetasContent() {
     column: "name",
   });
   const { data: expenses } = useTable<Expense>("expenses", householdId);
+  const { data: categories } = useTable<Category>("categories", householdId, { column: "name" });
 
   const [editingCard, setEditingCard] = useState<Card | null>(null);
   const [name, setName] = useState("");
   const [closingDay, setClosingDay] = useState("15");
   const [paymentDay, setPaymentDay] = useState("25");
   const [creditLimit, setCreditLimit] = useState("");
+  const [autoPostPayment, setAutoPostPayment] = useState(false);
+  const [paymentCategoryId, setPaymentCategoryId] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -37,11 +40,15 @@ function TarjetasContent() {
       setClosingDay(String(editingCard.closing_day));
       setPaymentDay(String(editingCard.payment_day));
       setCreditLimit(editingCard.credit_limit ? String(editingCard.credit_limit) : "");
+      setAutoPostPayment(!!editingCard.auto_post_payment);
+      setPaymentCategoryId(editingCard.payment_category_id ?? "");
     } else {
       setName("");
       setClosingDay("15");
       setPaymentDay("25");
       setCreditLimit("");
+      setAutoPostPayment(false);
+      setPaymentCategoryId("");
     }
     setError(null);
   }, [editingCard]);
@@ -57,6 +64,8 @@ function TarjetasContent() {
       closing_day: Number(closingDay),
       payment_day: Number(paymentDay),
       credit_limit: creditLimit ? Number(creditLimit) : null,
+      auto_post_payment: autoPostPayment,
+      payment_category_id: paymentCategoryId || null,
     };
 
     const { error } = editingCard
@@ -113,6 +122,39 @@ function TarjetasContent() {
             {saving ? "Guardando..." : editingCard ? "Guardar cambios" : "Agregar tarjeta"}
           </button>
         </div>
+
+        <div className="md:col-span-5 border-t border-slate-100 pt-3 flex flex-wrap items-end gap-3">
+          <label className="flex items-center gap-2 text-sm text-slate-600">
+            <input
+              type="checkbox"
+              checked={autoPostPayment}
+              onChange={(e) => setAutoPostPayment(e.target.checked)}
+            />
+            💳 Registrar el pago automáticamente en su fecha de pago
+          </label>
+          <div>
+            <label className="label">Categoría del pago</label>
+            <select
+              className="input"
+              value={paymentCategoryId}
+              onChange={(e) => setPaymentCategoryId(e.target.value)}
+              disabled={!autoPostPayment}
+            >
+              <option value="">Selecciona una categoría</option>
+              {categories.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.icon} {c.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+        {autoPostPayment && !paymentCategoryId && (
+          <p className="md:col-span-5 text-xs text-amber-600">
+            ⚠️ Elige una categoría para que el pago automático pueda registrarse (sugerencia: "💳
+            Tarjetas / Deudas").
+          </p>
+        )}
         {error && <p className="md:col-span-5 text-sm text-red-600">{error}</p>}
       </form>
 
@@ -181,6 +223,16 @@ function TarjetasContent() {
                     </span>
                     <span className="font-bold text-amber-900">{formatCurrency(closedDue)}</span>
                   </div>
+                  {card.auto_post_payment ? (
+                    <p className="text-xs text-amber-700 mt-1">
+                      ⚡ Este pago se registrará solo como gasto ese día.
+                    </p>
+                  ) : (
+                    <p className="text-xs text-amber-700/70 mt-1">
+                      Auto-pago desactivado — actívalo abajo con "editar" si quieres que se
+                      registre solo.
+                    </p>
+                  )}
                 </div>
 
                 <div className="bg-slate-50 rounded-xl p-3 mb-3">

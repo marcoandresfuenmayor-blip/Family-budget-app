@@ -36,6 +36,8 @@ export type Card = {
   payment_day: number;
   credit_limit: number | null;
   color: string;
+  auto_post_payment?: boolean;
+  payment_category_id?: string | null;
 };
 
 export type IncomeSource = {
@@ -72,6 +74,7 @@ export type Expense = {
   created_at: string;
   updated_by?: string | null;
   updated_at?: string | null;
+  is_card_payment?: boolean;
 };
 
 export type RecurringExpense = {

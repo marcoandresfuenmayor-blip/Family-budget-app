@@ -94,6 +94,11 @@ export default function CategoryDrilldown({
                                 fijo
                               </span>
                             )}
+                            {e.is_card_payment && (
+                              <span className="bg-sky-100 text-sky-700 px-1.5 py-0.5 rounded flex-shrink-0">
+                                pago tarjeta
+                              </span>
+                            )}
                           </div>
                           <span className="font-medium text-slate-800 flex-shrink-0 ml-2">
                             {formatCurrency(Number(e.amount))}

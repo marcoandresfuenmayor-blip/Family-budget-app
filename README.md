@@ -123,6 +123,25 @@ formulario normal de Gastos (el de abajo) sigue siendo solo una etiqueta informa
 gasto puntual — no lo repite solo. Solo los gastos que crees como **plantilla** en este nuevo
 bloque se auto-repiten mes a mes. Así decides tú, gasto por gasto, cuáles quieres automatizar.
 
+## 3.4 Activar mejoras v5 (pago de tarjeta automático + balance acumulado)
+
+Corre esta migración adicional (aditiva, no borra nada):
+
+1. Ve a Supabase → **SQL Editor → New query**.
+2. Abre [`supabase/migration_v5_pago_tarjeta_automatico.sql`](./supabase/migration_v5_pago_tarjeta_automatico.sql),
+   copia su contenido y dale **Run**.
+3. Ve a **Tarjetas → editar** en cada tarjeta que quieras automatizar, activa **"💳 Registrar el
+   pago automáticamente"** y elige la categoría (sugerido: "💳 Tarjetas / Deudas").
+4. Listo. El día de pago de esa tarjeta, la app registra sola un gasto por el monto del corte ya
+   cerrado (lo que realmente toca pagar), para que quede reflejado en tu flujo de caja de ese mes.
+   Es "mixto": cada tarjeta lo activa por separado, y solo se registra si hubo algo que pagar.
+
+**Balance acumulado:** el Dashboard ahora tiene una tarjeta adicional, "💰 Balance acumulado", que
+suma todos tus ingresos menos todos tus gastos desde que empezaste a usar la app hasta el fin del
+mes que estás viendo. A diferencia de "Balance del mes" (que se reinicia cada mes), este sí se
+arrastra — si en agosto te sobraron $200, ese sobrante sigue sumando en septiembre. No requiere
+ninguna migración, es un cálculo automático.
+
 ## 4. Desplegar en la nube (para que ambos la usen desde el celular)
 
 La forma más simple y gratuita es con [Vercel](https://vercel.com):

@@ -103,6 +103,31 @@ function DashboardContent() {
   const incomeDelta = percentChange(totalIncome, prevTotalIncome);
   const balanceDelta = percentChange(balance, prevBalance);
 
+  // Balance acumulado: ingresos - gastos de TODA la historia hasta el fin del
+  // mes seleccionado (se arrastra mes a mes, positivo o negativo), a
+  // diferencia del "Balance del mes" que solo mira el mes seleccionado.
+  const endOfSelectedMonth = `${selectedMonth}-31`;
+  const endOfPrevMonth = `${previousMonth}-31`;
+  const accumulatedBalance = useMemo(() => {
+    const income = incomeEntries
+      .filter((e) => e.entry_date <= endOfSelectedMonth)
+      .reduce((s, e) => s + Number(e.amount), 0);
+    const spent = expenses
+      .filter((e) => e.expense_date <= endOfSelectedMonth)
+      .reduce((s, e) => s + Number(e.amount), 0);
+    return income - spent;
+  }, [incomeEntries, expenses, endOfSelectedMonth]);
+  const prevAccumulatedBalance = useMemo(() => {
+    const income = incomeEntries
+      .filter((e) => e.entry_date <= endOfPrevMonth)
+      .reduce((s, e) => s + Number(e.amount), 0);
+    const spent = expenses
+      .filter((e) => e.expense_date <= endOfPrevMonth)
+      .reduce((s, e) => s + Number(e.amount), 0);
+    return income - spent;
+  }, [incomeEntries, expenses, endOfPrevMonth]);
+  const accumulatedDelta = percentChange(accumulatedBalance, prevAccumulatedBalance);
+
   // Las alertas y recomendaciones siempre reflejan el momento actual (hoy),
   // sin importar qué mes estés revisando en el resto del dashboard.
   const alerts: Alert[] = useMemo(
@@ -166,7 +191,7 @@ function DashboardContent() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <SummaryCard
           label="Ingresos del mes"
           value={totalIncome}
@@ -184,7 +209,7 @@ function DashboardContent() {
           className="bg-rose-50 border-rose-200 text-rose-800"
         />
         <SummaryCard
-          label="Balance"
+          label="Balance del mes"
           value={balance}
           emoji={balance >= 0 ? "🎉" : "⚠️"}
           delta={balanceDelta}
@@ -195,7 +220,23 @@ function DashboardContent() {
               : "bg-amber-50 border-amber-200 text-amber-800"
           }
         />
+        <SummaryCard
+          label="Balance acumulado"
+          value={accumulatedBalance}
+          emoji={accumulatedBalance >= 0 ? "💰" : "🚨"}
+          delta={accumulatedDelta}
+          goodDirection="up"
+          className={
+            accumulatedBalance >= 0
+              ? "bg-indigo-50 border-indigo-200 text-indigo-800"
+              : "bg-red-50 border-red-200 text-red-800"
+          }
+        />
       </div>
+      <p className="text-xs text-slate-400 -mt-3">
+        💡 El "Balance acumulado" arrastra el sobrante (o déficit) de todos los meses anteriores —
+        es tu colchón real disponible hasta hoy. El "Balance del mes" solo mira {monthLabel(selectedMonth)}.
+      </p>
 
       <div>
         <h2 className="font-semibold mb-2">🔔 Alertas</h2>

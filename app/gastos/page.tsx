@@ -41,22 +41,43 @@ function GastosContent() {
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
   });
 
-  type SortKey = "expense_date" | "description" | "amount";
+  type SortKey = "expense_date" | "description" | "amount" | "category" | "card" | "registered";
   const [sortBy, setSortBy] = useState<SortKey>("expense_date");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+
+  const ASC_DEFAULT: SortKey[] = ["description", "category", "card"];
 
   function toggleSort(key: SortKey) {
     if (sortBy === key) {
       setSortDir((d) => (d === "asc" ? "desc" : "asc"));
     } else {
       setSortBy(key);
-      setSortDir(key === "description" ? "asc" : "desc");
+      setSortDir(ASC_DEFAULT.includes(key) ? "asc" : "desc");
     }
   }
 
   function sortIndicator(key: SortKey) {
     if (sortBy !== key) return "";
     return sortDir === "asc" ? " ▲" : " ▼";
+  }
+
+  function memberName(userId: string | null | undefined) {
+    if (!userId) return "—";
+    const member = members.find((m) => m.user_id === userId);
+    return member?.display_name || "Alguien del hogar";
+  }
+
+  function categoryName(id: string) {
+    return categories.find((c) => c.id === id)?.name ?? "";
+  }
+
+  function cardName(id: string | null) {
+    return cards.find((c) => c.id === id)?.name ?? "";
+  }
+
+  // Fecha/hora efectiva de "registro": la última edición si existe, si no la creación.
+  function registeredKey(e: Expense) {
+    return e.updated_at ?? e.created_at ?? "";
   }
 
   const filtered = expenses
@@ -68,18 +89,18 @@ function GastosContent() {
         cmp = a.description.localeCompare(b.description, "es");
       } else if (sortBy === "amount") {
         cmp = Number(a.amount) - Number(b.amount);
+      } else if (sortBy === "category") {
+        cmp = categoryName(a.category_id).localeCompare(categoryName(b.category_id), "es");
+      } else if (sortBy === "card") {
+        cmp = cardName(a.card_id).localeCompare(cardName(b.card_id), "es");
+      } else if (sortBy === "registered") {
+        cmp = registeredKey(a).localeCompare(registeredKey(b));
       } else {
         cmp = a.expense_date.localeCompare(b.expense_date);
       }
       return sortDir === "asc" ? cmp : -cmp;
     });
   const total = filtered.reduce((s, e) => s + Number(e.amount), 0);
-
-  function memberName(userId: string | null | undefined) {
-    if (!userId) return "—";
-    const member = members.find((m) => m.user_id === userId);
-    return member?.display_name || "Alguien del hogar";
-  }
 
   function formatDateTime(iso: string) {
     return new Date(iso).toLocaleString("es-ES", {
@@ -196,9 +217,15 @@ function GastosContent() {
                   <th className="py-2 pr-2 cursor-pointer select-none hover:text-slate-700" onClick={() => toggleSort("description")}>
                     Descripción{sortIndicator("description")}
                   </th>
-                  <th className="py-2 pr-2">Categoría</th>
-                  <th className="py-2 pr-2">Tarjeta</th>
-                  <th className="py-2 pr-2">Registrado</th>
+                  <th className="py-2 pr-2 cursor-pointer select-none hover:text-slate-700" onClick={() => toggleSort("category")}>
+                    Categoría{sortIndicator("category")}
+                  </th>
+                  <th className="py-2 pr-2 cursor-pointer select-none hover:text-slate-700" onClick={() => toggleSort("card")}>
+                    Tarjeta{sortIndicator("card")}
+                  </th>
+                  <th className="py-2 pr-2 cursor-pointer select-none hover:text-slate-700" onClick={() => toggleSort("registered")}>
+                    Registrado{sortIndicator("registered")}
+                  </th>
                   <th className="py-2 pr-2 text-right cursor-pointer select-none hover:text-slate-700" onClick={() => toggleSort("amount")}>
                     Monto{sortIndicator("amount")}
                   </th>
@@ -225,6 +252,11 @@ function GastosContent() {
                         {e.is_recurring && (
                           <span className="ml-2 text-xs bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">
                             fijo
+                          </span>
+                        )}
+                        {e.is_card_payment && (
+                          <span className="ml-2 text-xs bg-sky-100 text-sky-700 px-1.5 py-0.5 rounded">
+                            pago tarjeta
                           </span>
                         )}
                       </td>

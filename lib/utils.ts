@@ -312,7 +312,7 @@ export function cardCycleRange(closingDay: number, base = new Date()) {
 export function cardCycleSpend(expenses: Expense[], cardId: string, closingDay: number, base = new Date()) {
   const { cycleStart } = cardCycleRange(closingDay, base);
   return expenses
-    .filter((e) => e.card_id === cardId)
+    .filter((e) => e.card_id === cardId && !e.is_card_payment)
     .filter((e) => {
       const d = new Date(e.expense_date + "T00:00:00");
       return d > cycleStart && d <= base;
@@ -331,7 +331,7 @@ export function cardClosedCycleDue(expenses: Expense[], cardId: string, closingD
   const priorClosing = previousOccurrence(closingDay, dayBefore);
 
   return expenses
-    .filter((e) => e.card_id === cardId)
+    .filter((e) => e.card_id === cardId && !e.is_card_payment)
     .filter((e) => {
       const d = new Date(e.expense_date + "T00:00:00");
       return d > priorClosing && d <= lastClosing;

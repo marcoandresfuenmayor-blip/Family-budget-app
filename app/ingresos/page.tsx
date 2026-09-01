@@ -364,9 +364,28 @@ function IncomeEntryForm({
     }
   }, [editingEntry]);
 
+  async function isDuplicate() {
+    const { data } = await supabase
+      .from("income_entries")
+      .select("id, description")
+      .eq("entry_date", date)
+      .eq("amount", Number(amount));
+    if (!data) return false;
+    const desc = description.trim().toLowerCase();
+    return data.some((d) => d.id !== editingEntry?.id && d.description.trim().toLowerCase() === desc);
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!householdId || !amount || !description) return;
+
+    if (await isDuplicate()) {
+      const proceed = confirm(
+        `Ya existe un ingreso de ${formatCurrency(Number(amount))} el ${date} con la misma descripción ("${description}"). ¿Quieres guardarlo de todas formas?`
+      );
+      if (!proceed) return;
+    }
+
     setSaving(true);
 
     const payload = {

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useHousehold } from "@/lib/HouseholdContext";
+import Avatar from "@/components/Avatar";
 
 const links = [
   { href: "/", label: "📊 Dashboard" },
@@ -41,8 +42,9 @@ export default function Nav() {
             ))}
           </nav>
         </div>
-        <div className="flex items-center gap-3 text-sm">
-          <span className="text-white/85">👤 {displayName ?? session.user.email}</span>
+        <div className="flex items-center gap-2 text-sm">
+          <Avatar name={displayName ?? session.user.email ?? "?"} size="sm" />
+          <span className="text-white/85">{displayName ?? session.user.email}</span>
           <button
             onClick={signOut}
             className="bg-white/15 hover:bg-white/25 text-white font-medium px-3 py-1.5 rounded-xl transition-colors"

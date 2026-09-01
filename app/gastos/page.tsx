@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import AuthGuard from "@/components/AuthGuard";
+import Avatar from "@/components/Avatar";
 import { useHousehold } from "@/lib/HouseholdContext";
 import { useTable } from "@/lib/hooks";
 import { supabase } from "@/lib/supabaseClient";
@@ -296,17 +297,23 @@ function GastosContent() {
                       <td className="py-2 pr-2">{card ? card.name : "—"}</td>
                       <td className="py-2 pr-2 text-xs text-slate-500 whitespace-nowrap">
                         {wasEdited ? (
-                          <>
-                            ✏️ {memberName(e.updated_by)}
-                            <br />
-                            {formatDateTime(e.updated_at as string)}
-                          </>
+                          <div className="flex items-center gap-1.5">
+                            <Avatar name={memberName(e.updated_by)} size="sm" />
+                            <span>
+                              ✏️ {memberName(e.updated_by)}
+                              <br />
+                              {formatDateTime(e.updated_at as string)}
+                            </span>
+                          </div>
                         ) : (
-                          <>
-                            👤 {memberName(e.created_by)}
-                            <br />
-                            {formatDateTime(e.created_at)}
-                          </>
+                          <div className="flex items-center gap-1.5">
+                            <Avatar name={memberName(e.created_by)} size="sm" />
+                            <span>
+                              {memberName(e.created_by)}
+                              <br />
+                              {formatDateTime(e.created_at)}
+                            </span>
+                          </div>
                         )}
                       </td>
                       <td className="py-2 pr-2 text-right font-medium whitespace-nowrap">
@@ -1008,9 +1015,28 @@ function ExpenseForm({
     setError(null);
   }, [editingExpense]);
 
+  async function isDuplicate() {
+    const { data } = await supabase
+      .from("expenses")
+      .select("id, description")
+      .eq("expense_date", date)
+      .eq("amount", Number(amount));
+    if (!data) return false;
+    const desc = description.trim().toLowerCase();
+    return data.some((d) => d.id !== editingExpense?.id && d.description.trim().toLowerCase() === desc);
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!householdId || !categoryId || !amount) return;
+
+    if (await isDuplicate()) {
+      const proceed = confirm(
+        `Ya existe un gasto de ${formatCurrency(Number(amount))} el ${date} con la misma descripción ("${description}"). ¿Quieres guardarlo de todas formas?`
+      );
+      if (!proceed) return;
+    }
+
     setSaving(true);
     setError(null);
 

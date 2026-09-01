@@ -75,6 +75,19 @@ export type Expense = {
   updated_by?: string | null;
   updated_at?: string | null;
   is_card_payment?: boolean;
+  installment_purchase_id?: string | null;
+};
+
+export type InstallmentPurchase = {
+  id: string;
+  household_id: string;
+  category_id: string;
+  card_id: string;
+  description: string;
+  installment_amount: number;
+  total_installments: number;
+  installments_posted: number;
+  active: boolean;
 };
 
 export type RecurringExpense = {

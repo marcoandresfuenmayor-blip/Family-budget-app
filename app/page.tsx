@@ -19,9 +19,19 @@ import AlertBanner from "@/components/AlertBanner";
 import CategoryDrilldown from "@/components/CategoryDrilldown";
 import RecommendationsPanel from "@/components/RecommendationsPanel";
 import GoalsPanel from "@/components/GoalsPanel";
+import MiniPieCard from "@/components/MiniPieCard";
 import { useHousehold } from "@/lib/HouseholdContext";
 import { useTable } from "@/lib/hooks";
-import { Card, Category, CategoryBudget, Expense, IncomeEntry, IncomeSource, SavingsGoal } from "@/lib/types";
+import {
+  Card,
+  Category,
+  CategoryBudget,
+  Expense,
+  HouseholdMember,
+  IncomeEntry,
+  IncomeSource,
+  SavingsGoal,
+} from "@/lib/types";
 import {
   Alert,
   buildCardAlerts,
@@ -66,6 +76,7 @@ function DashboardContent() {
   const { data: expenses } = useTable<Expense>("expenses", householdId);
   const { data: incomeSources } = useTable<IncomeSource>("income_sources", householdId);
   const { data: incomeEntries } = useTable<IncomeEntry>("income_entries", householdId);
+  const { data: members } = useTable<HouseholdMember>("household_members", householdId);
   const { data: goals, refresh: refreshGoals } = useTable<SavingsGoal>("savings_goals", householdId, {
     column: "created_at",
   });
@@ -159,6 +170,46 @@ function DashboardContent() {
   const pieDataRaw = chartData.filter((d) => d.Gastado > 0);
   const pieTotal = pieDataRaw.reduce((s, d) => s + d.Gastado, 0);
   const pieData = pieDataRaw.map((d) => ({ ...d, pct: pieTotal > 0 ? (d.Gastado / pieTotal) * 100 : 0 }));
+
+  function memberName(userId: string | null | undefined) {
+    if (!userId) return "Sin registrar";
+    const member = members.find((m) => m.user_id === userId);
+    return member?.display_name || "Alguien del hogar";
+  }
+
+  // 👥 Gastos por persona: según quién registró cada gasto en la app.
+  const expensesByPerson = useMemo(() => {
+    const totals = new Map<string, number>();
+    for (const e of monthExpenses) {
+      const name = memberName(e.created_by);
+      totals.set(name, (totals.get(name) ?? 0) + Number(e.amount));
+    }
+    return Array.from(totals, ([name, value]) => ({ name, value }));
+  }, [monthExpenses, members]);
+
+  // 👥 Ingresos por persona: según el "dueño" de la fuente de ingreso.
+  const incomeByPerson = useMemo(() => {
+    const totals = new Map<string, number>();
+    for (const e of monthIncome) {
+      const source = incomeSources.find((s) => s.id === e.income_source_id);
+      const name = source?.owner_name || "Sin asignar";
+      totals.set(name, (totals.get(name) ?? 0) + Number(e.amount));
+    }
+    return Array.from(totals, ([name, value]) => ({ name, value }));
+  }, [monthIncome, incomeSources]);
+
+  // 💳 Qué pagamos con tarjeta, por categoría (excluye el pago mismo de la
+  // tarjeta, que no es una compra sino la liquidación del corte anterior).
+  const cardSpendByCategory = useMemo(() => {
+    const totals = new Map<string, number>();
+    for (const e of monthExpenses) {
+      if (!e.card_id || e.is_card_payment) continue;
+      const cat = categories.find((c) => c.id === e.category_id);
+      const name = cat ? `${cat.icon} ${cat.name}` : "Sin categoría";
+      totals.set(name, (totals.get(name) ?? 0) + Number(e.amount));
+    }
+    return Array.from(totals, ([name, value]) => ({ name, value }));
+  }, [monthExpenses, categories]);
 
   return (
     <div className="space-y-6">
@@ -313,6 +364,31 @@ function DashboardContent() {
           ) : (
             <p className="text-sm text-slate-500">Registra gastos para ver la distribución.</p>
           )}
+        </div>
+      </div>
+
+      <div>
+        <h2 className="font-semibold mb-1">👥 Distribución entre ustedes</h2>
+        <p className="text-xs text-slate-400 mb-3">
+          Gastos según quién los registró en la app, ingresos según el dueño de cada fuente, y en
+          qué se va lo que pagan con tarjeta.
+        </p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <MiniPieCard
+            title="🧾 Gastos por persona"
+            data={expensesByPerson}
+            emptyText="Registra gastos para ver la distribución."
+          />
+          <MiniPieCard
+            title="💵 Ingresos por persona"
+            data={incomeByPerson}
+            emptyText="Registra ingresos para ver la distribución."
+          />
+          <MiniPieCard
+            title="💳 Tarjeta: en qué se va"
+            data={cardSpendByCategory}
+            emptyText="Aún no hay gastos con tarjeta este mes."
+          />
         </div>
       </div>
 

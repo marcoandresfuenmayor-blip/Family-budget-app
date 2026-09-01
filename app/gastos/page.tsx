@@ -5,8 +5,8 @@ import AuthGuard from "@/components/AuthGuard";
 import { useHousehold } from "@/lib/HouseholdContext";
 import { useTable } from "@/lib/hooks";
 import { supabase } from "@/lib/supabaseClient";
-import { Card, Category, Expense, HouseholdMember, RecurringExpense } from "@/lib/types";
-import { formatCurrency } from "@/lib/utils";
+import { Card, Category, Expense, HouseholdMember, InstallmentPurchase, RecurringExpense } from "@/lib/types";
+import { formatCurrency, nextOccurrence } from "@/lib/utils";
 
 export default function GastosPage() {
   return (
@@ -27,6 +27,11 @@ function GastosContent() {
     "recurring_expenses",
     householdId,
     { column: "day_of_month" }
+  );
+  const { data: installmentPurchases, refresh: refreshInstallments } = useTable<InstallmentPurchase>(
+    "installment_purchases",
+    householdId,
+    { column: "created_at", ascending: false }
   );
   const {
     data: expenses,
@@ -152,6 +157,43 @@ function GastosContent() {
     refresh();
   }
 
+  async function registerInstallmentNow(ip: InstallmentPurchase) {
+    if (!householdId || ip.installments_posted >= ip.total_installments) return;
+    const today = new Date().toISOString().slice(0, 10);
+    const { data: existing } = await supabase
+      .from("expenses")
+      .select("id")
+      .eq("installment_purchase_id", ip.id)
+      .gte("expense_date", today.slice(0, 7) + "-01")
+      .lte("expense_date", today.slice(0, 7) + "-31");
+    if (existing && existing.length > 0) {
+      alert("Esta cuota ya se registró este mes.");
+      return;
+    }
+    const nextNum = ip.installments_posted + 1;
+    await supabase.from("expenses").insert({
+      household_id: householdId,
+      category_id: ip.category_id,
+      card_id: ip.card_id,
+      description: `${ip.description} (cuota ${nextNum}/${ip.total_installments})`,
+      amount: ip.installment_amount,
+      expense_date: today,
+      is_recurring: false,
+      is_extra: false,
+      installment_purchase_id: ip.id,
+      created_by: session?.user.id ?? null,
+    });
+    await supabase
+      .from("installment_purchases")
+      .update({
+        installments_posted: nextNum,
+        active: nextNum < ip.total_installments,
+      })
+      .eq("id", ip.id);
+    refresh();
+    refreshInstallments();
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
@@ -242,6 +284,11 @@ function GastosContent() {
                             pago tarjeta
                           </span>
                         )}
+                        {e.installment_purchase_id && (
+                          <span className="ml-2 text-xs bg-violet-100 text-violet-700 px-1.5 py-0.5 rounded">
+                            cuota
+                          </span>
+                        )}
                       </td>
                       <td className="py-2 pr-2">
                         {cat ? `${cat.icon} ${cat.name}` : "—"}
@@ -303,6 +350,22 @@ function GastosContent() {
         householdId={householdId}
         onChange={refreshRecurring}
         onRegisterNow={registerNow}
+      />
+
+      <div className="card bg-violet-50 border-violet-200 text-violet-900 text-sm">
+        💡 <strong>Compras diferidas a cuotas:</strong> úsalo cuando pagas algo "a meses" con la
+        tarjeta. Ingresas el monto de cada cuota y a cuántos meses la difieres; la primera cuota se
+        registra sola en el próximo corte de esa tarjeta, y una cuota más en cada corte siguiente,
+        hasta completar el plazo — sin que tengas que acordarte de anotarla cada mes.
+      </div>
+
+      <InstallmentManager
+        installmentPurchases={installmentPurchases}
+        categories={categories}
+        cards={cards}
+        householdId={householdId}
+        onChange={refreshInstallments}
+        onRegisterNow={registerInstallmentNow}
       />
     </div>
   );
@@ -575,6 +638,314 @@ function RecurringExpenseManager({
                         editar
                       </button>
                       <button onClick={() => removeTpl(tpl.id)} className="text-red-500 hover:underline text-xs">
+                        eliminar
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function InstallmentManager({
+  installmentPurchases,
+  categories,
+  cards,
+  householdId,
+  onChange,
+  onRegisterNow,
+}: {
+  installmentPurchases: InstallmentPurchase[];
+  categories: Category[];
+  cards: Card[];
+  householdId: string | null;
+  onChange: () => void;
+  onRegisterNow: (ip: InstallmentPurchase) => void;
+}) {
+  const [editingIp, setEditingIp] = useState<InstallmentPurchase | null>(null);
+  const [description, setDescription] = useState("");
+  const [installmentAmount, setInstallmentAmount] = useState("");
+  const [categoryId, setCategoryId] = useState("");
+  const [cardId, setCardId] = useState("");
+  const [totalInstallments, setTotalInstallments] = useState("12");
+  const [saving, setSaving] = useState(false);
+
+  type IpSortKey = "description" | "category" | "card" | "amount" | "progress" | "next";
+  const [ipSortBy, setIpSortBy] = useState<IpSortKey>("next");
+  const [ipSortDir, setIpSortDir] = useState<"asc" | "desc">("asc");
+  const IP_ASC_DEFAULT: IpSortKey[] = ["description", "category", "card", "next"];
+
+  function toggleIpSort(key: IpSortKey) {
+    if (ipSortBy === key) {
+      setIpSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setIpSortBy(key);
+      setIpSortDir(IP_ASC_DEFAULT.includes(key) ? "asc" : "desc");
+    }
+  }
+
+  function ipSortIndicator(key: IpSortKey) {
+    if (ipSortBy !== key) return "";
+    return ipSortDir === "asc" ? " ▲" : " ▼";
+  }
+
+  function ipCategoryName(id: string) {
+    return categories.find((c) => c.id === id)?.name ?? "";
+  }
+
+  function ipCard(id: string) {
+    return cards.find((c) => c.id === id);
+  }
+
+  function nextDueDate(ip: InstallmentPurchase) {
+    const card = ipCard(ip.card_id);
+    if (!card || ip.installments_posted >= ip.total_installments) return null;
+    return nextOccurrence(card.closing_day);
+  }
+
+  useEffect(() => {
+    if (editingIp) {
+      setDescription(editingIp.description);
+      setInstallmentAmount(String(editingIp.installment_amount));
+      setCategoryId(editingIp.category_id);
+      setCardId(editingIp.card_id);
+      setTotalInstallments(String(editingIp.total_installments));
+    } else {
+      setDescription("");
+      setInstallmentAmount("");
+      setCategoryId("");
+      setCardId("");
+      setTotalInstallments("12");
+    }
+  }, [editingIp]);
+
+  async function saveIp(e: React.FormEvent) {
+    e.preventDefault();
+    if (!householdId || !description || !installmentAmount || !categoryId || !cardId) return;
+    setSaving(true);
+
+    const payload = {
+      description,
+      installment_amount: Number(installmentAmount),
+      category_id: categoryId,
+      card_id: cardId,
+      total_installments: Number(totalInstallments),
+    };
+
+    if (editingIp) {
+      await supabase.from("installment_purchases").update(payload).eq("id", editingIp.id);
+    } else {
+      await supabase.from("installment_purchases").insert({
+        household_id: householdId,
+        installments_posted: 0,
+        ...payload,
+      });
+    }
+
+    setSaving(false);
+    setEditingIp(null);
+    onChange();
+  }
+
+  async function toggleActive(ip: InstallmentPurchase) {
+    await supabase.from("installment_purchases").update({ active: !ip.active }).eq("id", ip.id);
+    onChange();
+  }
+
+  async function removeIp(id: string) {
+    if (!confirm("¿Eliminar esta compra diferida? (las cuotas ya registradas no se borran)")) return;
+    await supabase.from("installment_purchases").delete().eq("id", id);
+    if (editingIp?.id === id) setEditingIp(null);
+    onChange();
+  }
+
+  const sortedIps = installmentPurchases.slice().sort((a, b) => {
+    let cmp = 0;
+    if (ipSortBy === "description") {
+      cmp = a.description.localeCompare(b.description, "es");
+    } else if (ipSortBy === "category") {
+      cmp = ipCategoryName(a.category_id).localeCompare(ipCategoryName(b.category_id), "es");
+    } else if (ipSortBy === "card") {
+      cmp = (ipCard(a.card_id)?.name ?? "").localeCompare(ipCard(b.card_id)?.name ?? "", "es");
+    } else if (ipSortBy === "amount") {
+      cmp = Number(a.installment_amount) - Number(b.installment_amount);
+    } else if (ipSortBy === "progress") {
+      cmp = a.installments_posted / a.total_installments - b.installments_posted / b.total_installments;
+    } else {
+      const da = nextDueDate(a);
+      const db = nextDueDate(b);
+      if (!da && !db) cmp = 0;
+      else if (!da) cmp = 1;
+      else if (!db) cmp = -1;
+      else cmp = da.getTime() - db.getTime();
+    }
+    return ipSortDir === "asc" ? cmp : -cmp;
+  });
+
+  const activeTotal = installmentPurchases
+    .filter((ip) => ip.active)
+    .reduce((s, ip) => s + Number(ip.installment_amount), 0);
+  const activeCount = installmentPurchases.filter((ip) => ip.active).length;
+
+  return (
+    <div className="card">
+      <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+        <h2 className="font-semibold">
+          🗓️ Compras diferidas a cuotas{" "}
+          <span className="text-slate-400 font-normal">
+            ({activeCount} activa{activeCount === 1 ? "" : "s"})
+          </span>
+        </h2>
+        <span className="font-semibold text-violet-700">
+          Total cuotas activas: {formatCurrency(activeTotal)}/mes
+        </span>
+      </div>
+
+      <form onSubmit={saveIp} className="grid grid-cols-1 md:grid-cols-6 gap-3 items-end mb-4">
+        {editingIp && (
+          <div className="md:col-span-6 flex items-center justify-between bg-brand-50 text-brand-700 text-sm rounded-lg px-3 py-2">
+            <span>✏️ Editando: {editingIp.description}</span>
+            <button type="button" onClick={() => setEditingIp(null)} className="underline">
+              Cancelar
+            </button>
+          </div>
+        )}
+        <div className="md:col-span-2">
+          <label className="label">Descripción</label>
+          <input
+            className="input"
+            required
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="Ej. Lavadora"
+          />
+        </div>
+        <div>
+          <label className="label">Cuota mensual</label>
+          <input
+            className="input"
+            required
+            type="number"
+            min="0"
+            step="0.01"
+            value={installmentAmount}
+            onChange={(e) => setInstallmentAmount(e.target.value)}
+          />
+        </div>
+        <div>
+          <label className="label">Categoría</label>
+          <select className="input" required value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
+            <option value="">Selecciona</option>
+            {categories.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.icon} {c.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="label">Tarjeta</label>
+          <select className="input" required value={cardId} onChange={(e) => setCardId(e.target.value)}>
+            <option value="">Selecciona</option>
+            {cards.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="label">Número de meses</label>
+          <input
+            className="input"
+            required
+            type="number"
+            min="1"
+            value={totalInstallments}
+            onChange={(e) => setTotalInstallments(e.target.value)}
+          />
+        </div>
+        <div className="md:col-span-6">
+          <button type="submit" disabled={saving} className="btn-primary">
+            {saving ? "Guardando..." : editingIp ? "Guardar cambios" : "Agregar compra diferida"}
+          </button>
+        </div>
+      </form>
+
+      {installmentPurchases.length > 0 && (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-slate-500 border-b">
+                <th className="py-2 pr-2 cursor-pointer select-none hover:text-slate-700" onClick={() => toggleIpSort("description")}>
+                  Descripción{ipSortIndicator("description")}
+                </th>
+                <th className="py-2 pr-2 cursor-pointer select-none hover:text-slate-700" onClick={() => toggleIpSort("category")}>
+                  Categoría{ipSortIndicator("category")}
+                </th>
+                <th className="py-2 pr-2 cursor-pointer select-none hover:text-slate-700" onClick={() => toggleIpSort("card")}>
+                  Tarjeta{ipSortIndicator("card")}
+                </th>
+                <th className="py-2 pr-2 cursor-pointer select-none hover:text-slate-700" onClick={() => toggleIpSort("progress")}>
+                  Progreso{ipSortIndicator("progress")}
+                </th>
+                <th className="py-2 pr-2 cursor-pointer select-none hover:text-slate-700" onClick={() => toggleIpSort("next")}>
+                  Próxima cuota{ipSortIndicator("next")}
+                </th>
+                <th className="py-2 pr-2 text-right cursor-pointer select-none hover:text-slate-700" onClick={() => toggleIpSort("amount")}>
+                  Cuota{ipSortIndicator("amount")}
+                </th>
+                <th className="py-2 pr-2"></th>
+                <th className="py-2 pr-2"></th>
+                <th className="py-2 pr-2"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {sortedIps.map((ip) => {
+                const cat = categories.find((c) => c.id === ip.category_id);
+                const card = ipCard(ip.card_id);
+                const due = nextDueDate(ip);
+                const completed = ip.installments_posted >= ip.total_installments;
+                return (
+                  <tr key={ip.id} className={`border-b last:border-0 ${editingIp?.id === ip.id ? "bg-brand-50" : completed ? "opacity-60" : ""}`}>
+                    <td className="py-2 pr-2">{ip.description}</td>
+                    <td className="py-2 pr-2">{cat ? `${cat.icon} ${cat.name}` : "—"}</td>
+                    <td className="py-2 pr-2">{card ? card.name : "—"}</td>
+                    <td className="py-2 pr-2 whitespace-nowrap">
+                      {completed ? "✅ completada" : `cuota ${ip.installments_posted}/${ip.total_installments}`}
+                    </td>
+                    <td className="py-2 pr-2 whitespace-nowrap">
+                      {due ? due.toLocaleDateString("es-ES") : "—"}
+                    </td>
+                    <td className="py-2 pr-2 text-right">{formatCurrency(Number(ip.installment_amount))}</td>
+                    <td className="py-2 pr-2">
+                      <button onClick={() => toggleActive(ip)} className="text-xs text-brand-600 hover:underline">
+                        {ip.active ? "activa" : "pausada"}
+                      </button>
+                    </td>
+                    <td className="py-2 pr-2">
+                      {!completed && (
+                        <button
+                          onClick={() => onRegisterNow(ip)}
+                          className="text-xs bg-emerald-100 text-emerald-700 hover:bg-emerald-200 px-2 py-1 rounded-lg font-medium whitespace-nowrap"
+                        >
+                          ⚡ Registrar cuota
+                        </button>
+                      )}
+                    </td>
+                    <td className="py-2 pr-2 text-right whitespace-nowrap">
+                      <button
+                        onClick={() => setEditingIp(ip)}
+                        className="text-brand-600 hover:underline text-xs mr-3"
+                      >
+                        editar
+                      </button>
+                      <button onClick={() => removeIp(ip.id)} className="text-red-500 hover:underline text-xs">
                         eliminar
                       </button>
                     </td>

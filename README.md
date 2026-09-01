@@ -142,6 +142,21 @@ mes que estás viendo. A diferencia de "Balance del mes" (que se reinicia cada m
 arrastra — si en agosto te sobraron $200, ese sobrante sigue sumando en septiembre. No requiere
 ninguna migración, es un cálculo automático.
 
+## 3.5 Activar mejoras v6 (compras diferidas a cuotas)
+
+✅ **Esta migración ya fue aplicada automáticamente en tu base de datos** (vía el conector de
+Supabase) — no necesitas correr nada en el SQL Editor esta vez. El archivo
+[`supabase/migration_v6_compras_diferidas.sql`](./supabase/migration_v6_compras_diferidas.sql)
+queda en el repositorio solo como referencia de lo que se aplicó.
+
+Cómo usarlo: en **Gastos**, hasta abajo, hay un bloque **"🗓️ Compras diferidas a cuotas"**.
+Ingresas la descripción, el monto de **cada cuota** (no el total — tú decides cuánto es la cuota
+mensual), la categoría, la tarjeta y a cuántos meses la difieres. La primera cuota se registra
+sola en el **próximo corte de esa tarjeta** (no el mismo día que la creas), y una cuota más en
+cada corte siguiente hasta completar el plazo. Si no quieres esperar al corte, usa
+**"⚡ Registrar cuota"** para cargarla al instante. Cuando se completan todas las cuotas, la fila
+queda marcada como "✅ completada".
+
 ## 4. Desplegar en la nube (para que ambos la usen desde el celular)
 
 La forma más simple y gratuita es con [Vercel](https://vercel.com):

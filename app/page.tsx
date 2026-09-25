@@ -203,6 +203,8 @@ function DashboardContent() {
     };
   });
 
+  const overLimitCount = chartData.filter((d) => d.Límite > 0 && d.Gastado > d.Límite).length;
+
   const pieDataRaw = chartData.filter((d) => d.Gastado > 0);
   const pieTotal = pieDataRaw.reduce((s, d) => s + d.Gastado, 0);
   const pieData = pieDataRaw.map((d) => ({ ...d, pct: pieTotal > 0 ? (d.Gastado / pieTotal) * 100 : 0 }));
@@ -328,18 +330,22 @@ function DashboardContent() {
       <SortableSections
         order={dashboardOrder}
         onSave={saveDashboardOrder}
+        storageKey={`ff-dashboard-abiertas-${session?.user.id ?? "anon"}`}
         sections={[
           {
             key: "recomendaciones",
             title: "💡 Recomendaciones",
-            node: <RecommendationsPanel recs={recommendations} />,
+            summary: recommendations.length ? `${recommendations.length} sugerencia${recommendations.length === 1 ? "" : "s"}` : "Sin sugerencias por ahora",
+            node: <RecommendationsPanel recs={recommendations} hideTitle />,
           },
           {
             key: "alertas",
             title: "🔔 Alertas",
+            summary: alerts.length
+              ? `${alerts.some((a) => a.level === "red") ? "🔴 " : ""}${alerts.length} alerta${alerts.length === 1 ? "" : "s"}`
+              : "✅ Todo tranquilo",
             node: (
             <div>
-              <h2 className="font-semibold mb-2">🔔 Alertas</h2>
               <AlertBanner alerts={alerts} />
             </div>
             ),
@@ -347,6 +353,7 @@ function DashboardContent() {
           {
             key: "flujo",
             title: "📆 Próximos pagos y cobros",
+            summary: "Calendario de los próximos días",
             node: (
               <CashFlowTimeline
                 startBalance={balanceToday}
@@ -357,12 +364,14 @@ function DashboardContent() {
                 expenses={expenses}
                 cards={cards}
                 categories={categories}
+                hideTitle
               />
             ),
           },
           {
             key: "graficos",
             title: "📈 Gastado vs. límite y distribución",
+            summary: `${formatCurrency(totalSpent)} gastado`,
             node: (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <div className="card">
@@ -441,14 +450,14 @@ function DashboardContent() {
           {
             key: "tendencia",
             title: "📉 Tendencia de gasto mes a mes",
-            node: <TrendChart expenses={expenses} categories={categories} endMonth={selectedMonth} />,
+            node: <TrendChart expenses={expenses} categories={categories} endMonth={selectedMonth} hideTitle />,
           },
           {
             key: "distribucion",
             title: "👥 Distribución entre ustedes",
+            summary: "Por persona y por tarjeta",
             node: (
             <div>
-              <h2 className="font-semibold mb-1">👥 Distribución entre ustedes</h2>
               <p className="text-xs text-slate-400 mb-3">
                 Gastos según quién los registró en la app, ingresos según el dueño de cada fuente, y en
                 qué se va lo que pagan con tarjeta.
@@ -476,9 +485,11 @@ function DashboardContent() {
           {
             key: "limites",
             title: "🎯 Límites por categoría",
+            summary: overLimitCount
+              ? `🔴 ${overLimitCount} categoría${overLimitCount === 1 ? "" : "s"} sobre el límite`
+              : "Todas dentro del límite",
             node: (
             <div className="card">
-              <h2 className="font-semibold mb-1">🎯 Límites por categoría</h2>
               <p className="text-xs text-slate-400 mb-3">Haz clic en una categoría para ver el detalle de sus gastos del mes.</p>
               <CategoryDrilldown categories={categories} budgets={budgets} monthExpenses={monthExpenses} cards={cards} />
             </div>
@@ -487,6 +498,7 @@ function DashboardContent() {
           {
             key: "metas",
             title: "🏆 Metas de ahorro",
+            summary: goals.length ? `${goals.length} meta${goals.length === 1 ? "" : "s"}` : "Sin metas aún",
             node: (
             <GoalsPanel
               goals={goals}
@@ -494,6 +506,7 @@ function DashboardContent() {
               expenses={expenses}
               householdId={householdId}
               onChange={refreshGoals}
+              hideTitle
             />
             ),
           },

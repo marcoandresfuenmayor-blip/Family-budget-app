@@ -21,10 +21,12 @@ export default function TrendChart({
   expenses,
   categories,
   endMonth,
+  hideTitle = false,
 }: {
   expenses: Expense[];
   categories: Category[];
   endMonth: string;
+  hideTitle?: boolean;
 }) {
   const [categoryId, setCategoryId] = useState("");
   const data = useMemo(
@@ -39,7 +41,7 @@ export default function TrendChart({
   return (
     <div className="card">
       <div className="flex items-center justify-between flex-wrap gap-2 mb-2">
-        <h2 className="font-semibold">📉 Tendencia de gasto mes a mes</h2>
+        {hideTitle ? <span /> : <h2 className="font-semibold">📉 Tendencia de gasto mes a mes</h2>}
         <select className="input !w-auto !py-1 text-sm" value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
           <option value="">Todas las categorías</option>
           {categories.map((c) => (

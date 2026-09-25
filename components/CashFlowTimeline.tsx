@@ -47,6 +47,7 @@ export default function CashFlowTimeline(props: {
   expenses: Expense[];
   cards: Card[];
   categories: Category[];
+  hideTitle?: boolean;
 }) {
   const [days, setDays] = useState(30);
   const [view, setView] = useState<"lista" | "calendario">("lista");
@@ -75,7 +76,7 @@ export default function CashFlowTimeline(props: {
   return (
     <div className="card">
       <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
-        <h2 className="font-semibold">📆 Próximos pagos y cobros</h2>
+        {props.hideTitle ? <span /> : <h2 className="font-semibold">📆 Próximos pagos y cobros</h2>}
         <div className="flex gap-1.5 flex-wrap">
           {[7, 15, 30].map((d) => (
             <button

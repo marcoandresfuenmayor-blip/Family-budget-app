@@ -5,6 +5,7 @@ import { ReactNode, useEffect, useState } from "react";
 export type DashboardSection = {
   key: string;
   title: string;
+  summary?: ReactNode; // se ve en la barra aunque la sección esté cerrada
   node: ReactNode;
 };
 
@@ -15,19 +16,50 @@ export function mergeOrder(saved: string[] | null | undefined, defaults: string[
   return [...valid, ...defaults.filter((k) => !valid.includes(k))];
 }
 
+const DEFAULT_OPEN = ["recomendaciones", "alertas"];
+
 export default function SortableSections({
   sections,
   order,
   onSave,
+  storageKey,
 }: {
   sections: DashboardSection[];
   order: string[];
   onSave: (order: string[]) => Promise<void> | void;
+  storageKey: string;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(order);
   const [dragKey, setDragKey] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [openKeys, setOpenKeys] = useState<Set<string>>(new Set(DEFAULT_OPEN));
+
+  // Recuerda qué secciones dejaste abiertas (en este dispositivo).
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(storageKey);
+      if (saved) setOpenKeys(new Set(JSON.parse(saved)));
+    } catch {
+      /* ignorar */
+    }
+  }, [storageKey]);
+
+  function persist(next: Set<string>) {
+    setOpenKeys(next);
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(Array.from(next)));
+    } catch {
+      /* ignorar */
+    }
+  }
+
+  function toggle(key: string) {
+    const next = new Set(openKeys);
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
+    persist(next);
+  }
 
   useEffect(() => {
     if (!editing) setDraft(order);
@@ -35,6 +67,7 @@ export default function SortableSections({
 
   const byKey = new Map(sections.map((s) => [s.key, s]));
   const current = editing ? draft : order;
+  const allOpen = sections.every((s) => openKeys.has(s.key));
 
   function move(key: string, delta: number) {
     setDraft((prev) => {
@@ -65,10 +98,18 @@ export default function SortableSections({
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-end -mb-3">
+    <div className="space-y-3">
+      <div className="flex justify-end gap-2 flex-wrap">
+        {!editing && (
+          <button
+            onClick={() => persist(allOpen ? new Set() : new Set(sections.map((s) => s.key)))}
+            className="text-xs font-semibold px-3 py-1.5 rounded-full border border-slate-200 text-slate-500 hover:bg-slate-50"
+          >
+            {allOpen ? "➖ Contraer todo" : "➕ Expandir todo"}
+          </button>
+        )}
         {editing ? (
-          <div className="flex gap-2">
+          <>
             <button
               onClick={() => {
                 setDraft(order);
@@ -81,7 +122,7 @@ export default function SortableSections({
             <button onClick={finish} disabled={saving} className="btn-primary !text-xs !px-3 !py-1.5">
               {saving ? "Guardando..." : "✅ Listo"}
             </button>
-          </div>
+          </>
         ) : (
           <button
             onClick={() => setEditing(true)}
@@ -141,10 +182,35 @@ export default function SortableSections({
         </div>
       )}
 
-      {current.map((key) => {
-        const s = byKey.get(key);
-        return s ? <div key={key}>{s.node}</div> : null;
-      })}
+      {!editing &&
+        current.map((key) => {
+          const s = byKey.get(key);
+          if (!s) return null;
+          const isOpen = openKeys.has(key);
+          return (
+            <section key={key}>
+              <button
+                onClick={() => toggle(key)}
+                aria-expanded={isOpen}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl border text-left transition-colors ${
+                  isOpen
+                    ? "bg-brand-50 border-brand-100"
+                    : "bg-white border-slate-200 hover:bg-slate-50 shadow-sm"
+                }`}
+              >
+                <span
+                  className={`text-slate-400 text-xs transition-transform ${isOpen ? "rotate-90" : ""}`}
+                  aria-hidden
+                >
+                  ▶
+                </span>
+                <span className="font-heading font-semibold flex-1">{s.title}</span>
+                {s.summary && <span className="text-xs text-slate-500 text-right">{s.summary}</span>}
+              </button>
+              {isOpen && <div className="mt-2">{s.node}</div>}
+            </section>
+          );
+        })}
     </div>
   );
 }

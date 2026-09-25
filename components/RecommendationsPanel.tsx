@@ -2,10 +2,10 @@
 
 import { Recommendation } from "@/lib/utils";
 
-export default function RecommendationsPanel({ recs }: { recs: Recommendation[] }) {
+export default function RecommendationsPanel({ recs, hideTitle = false }: { recs: Recommendation[]; hideTitle?: boolean }) {
   return (
     <div className="card">
-      <h2 className="font-semibold mb-3">💡 Recomendaciones para ahorrar e invertir</h2>
+      {!hideTitle && <h2 className="font-semibold mb-3">💡 Recomendaciones para ahorrar e invertir</h2>}
       {recs.length === 0 ? (
         <p className="text-sm text-slate-500">
           Aún no hay suficientes datos este mes para generar recomendaciones. Carga tus gastos e

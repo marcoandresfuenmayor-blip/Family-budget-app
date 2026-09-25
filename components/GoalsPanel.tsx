@@ -11,12 +11,14 @@ export default function GoalsPanel({
   expenses,
   householdId,
   onChange,
+  hideTitle = false,
 }: {
   goals: SavingsGoal[];
   incomeEntries: IncomeEntry[];
   expenses: Expense[];
   householdId: string | null;
   onChange: () => void;
+  hideTitle?: boolean;
 }) {
   const [editingGoal, setEditingGoal] = useState<SavingsGoal | null>(null);
   const [name, setName] = useState("");
@@ -74,7 +76,7 @@ export default function GoalsPanel({
   return (
     <div className="card">
       <div className="flex items-center justify-between mb-3">
-        <h2 className="font-semibold">🏡 Metas de ahorro familiar</h2>
+        {hideTitle ? <span /> : <h2 className="font-semibold">🏡 Metas de ahorro familiar</h2>}
         <button
           onClick={() => (showForm ? resetForm() : setShowForm(true))}
           className="text-sm text-brand-600 hover:underline"

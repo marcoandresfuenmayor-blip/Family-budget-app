@@ -8,6 +8,7 @@ import { useTable } from "@/lib/hooks";
 import { supabase } from "@/lib/supabaseClient";
 import { Card, Category, Expense, HouseholdMember, InstallmentPurchase, RecurringExpense } from "@/lib/types";
 import { formatCurrency, nextOccurrence } from "@/lib/utils";
+import { monthEndKey, toDateKey } from "@/lib/insights";
 
 export default function GastosPage() {
   return (
@@ -132,13 +133,13 @@ function GastosContent() {
 
   async function registerNow(tpl: RecurringExpense) {
     if (!householdId) return;
-    const today = new Date().toISOString().slice(0, 10);
+    const today = toDateKey(new Date());
     const { data: existing } = await supabase
       .from("expenses")
       .select("id")
       .eq("recurring_expense_id", tpl.id)
       .gte("expense_date", today.slice(0, 7) + "-01")
-      .lte("expense_date", today.slice(0, 7) + "-31");
+      .lte("expense_date", monthEndKey(today.slice(0, 7)));
     if (existing && existing.length > 0) {
       alert("Este gasto fijo ya se registró este mes.");
       return;
@@ -160,13 +161,13 @@ function GastosContent() {
 
   async function registerInstallmentNow(ip: InstallmentPurchase) {
     if (!householdId || ip.installments_posted >= ip.total_installments) return;
-    const today = new Date().toISOString().slice(0, 10);
+    const today = toDateKey(new Date());
     const { data: existing } = await supabase
       .from("expenses")
       .select("id")
       .eq("installment_purchase_id", ip.id)
       .gte("expense_date", today.slice(0, 7) + "-01")
-      .lte("expense_date", today.slice(0, 7) + "-31");
+      .lte("expense_date", monthEndKey(today.slice(0, 7)));
     if (existing && existing.length > 0) {
       alert("Esta cuota ya se registró este mes.");
       return;
@@ -283,6 +284,16 @@ function GastosContent() {
                         {e.is_card_payment && (
                           <span className="ml-2 text-xs bg-sky-100 text-sky-700 px-1.5 py-0.5 rounded">
                             pago tarjeta
+                          </span>
+                        )}
+                        {e.is_free_money && (
+                          <span className="ml-2 text-xs bg-pink-100 text-pink-700 px-1.5 py-0.5 rounded">
+                            🎈 libre
+                          </span>
+                        )}
+                        {e.source === "whatsapp" && (
+                          <span className="ml-2 text-xs bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded">
+                            💬 whatsapp
                           </span>
                         )}
                         {e.installment_purchase_id && (
@@ -988,9 +999,10 @@ function ExpenseForm({
   const [amount, setAmount] = useState("");
   const [categoryId, setCategoryId] = useState("");
   const [cardId, setCardId] = useState("");
-  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState(() => toDateKey(new Date()));
   const [isRecurring, setIsRecurring] = useState(false);
   const [isExtra, setIsExtra] = useState(false);
+  const [isFreeMoney, setIsFreeMoney] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -1003,14 +1015,16 @@ function ExpenseForm({
       setDate(editingExpense.expense_date);
       setIsRecurring(editingExpense.is_recurring);
       setIsExtra(editingExpense.is_extra);
+      setIsFreeMoney(!!editingExpense.is_free_money);
     } else {
       setDescription("");
       setAmount("");
       setCategoryId("");
       setCardId("");
-      setDate(new Date().toISOString().slice(0, 10));
+      setDate(toDateKey(new Date()));
       setIsRecurring(false);
       setIsExtra(false);
+      setIsFreeMoney(false);
     }
     setError(null);
   }, [editingExpense]);
@@ -1051,6 +1065,7 @@ function ExpenseForm({
           expense_date: date,
           is_recurring: isRecurring,
           is_extra: isExtra,
+          is_free_money: isFreeMoney,
           updated_by: userId,
           updated_at: new Date().toISOString(),
         })
@@ -1070,6 +1085,7 @@ function ExpenseForm({
         expense_date: date,
         is_recurring: isRecurring,
         is_extra: isExtra,
+        is_free_money: isFreeMoney,
         created_by: userId,
       });
       setSaving(false);
@@ -1163,6 +1179,10 @@ function ExpenseForm({
         <label className="flex items-center gap-2 text-sm text-slate-600">
           <input type="checkbox" checked={isExtra} onChange={(e) => setIsExtra(e.target.checked)} />
           Gasto adicional / no planeado
+        </label>
+        <label className="flex items-center gap-2 text-sm text-slate-600" title="Se descuenta de tu plata libre de la quincena (ver sección Pareja)">
+          <input type="checkbox" checked={isFreeMoney} onChange={(e) => setIsFreeMoney(e.target.checked)} />
+          🎈 De mi plata libre
         </label>
 
         {error && <p className="text-sm text-red-600">{error}</p>}

@@ -157,6 +157,78 @@ cada corte siguiente hasta completar el plazo. Si no quieres esperar al corte, u
 **"⚡ Registrar cuota"** para cargarla al instante. Cuando se completan todas las cuotas, la fila
 queda marcada como "✅ completada".
 
+## 3.6 Mejoras v7 (ya aplicadas en tu base de datos)
+
+✅ La migración [`supabase/migration_v7_pareja_whatsapp.sql`](./supabase/migration_v7_pareja_whatsapp.sql)
+ya se aplicó automáticamente vía el conector de Supabase. No tienes que correr nada. Incluye:
+
+- **💞 Pareja** (menú): chequeo quincenal privado (lo del otro se ve solo cuando ambos responden),
+  resumen de la quincena en palabras y "plata libre" por persona. Para que un gasto cuente como plata
+  libre, marca "🎈 De mi plata libre" al registrarlo.
+- **📈 Promedios** (menú): cuánto pagan en promedio por cada cosa específica (luz, agua, gasolina…),
+  con alertas cuando un pago está en dos categorías distintas o escondido en "Otros".
+- **Dashboard**: "Próximos pagos y cobros" (lista o calendario, 7/15/30 días, avisa si el saldo se
+  pondría negativo), "Tendencia de gasto mes a mes" (total o por categoría, con línea de tendencia),
+  Recomendaciones arriba, y el botón **↕️ Organizar secciones** para arrastrar las secciones al orden
+  que cada uno prefiera (se guarda por usuario).
+- Corrección: los gastos automáticos que decían "(autom√°tico)" ahora dicen "(automático)", y las
+  funciones que los crean quedaron corregidas.
+- Corrección: al registrar de noche, la fecha por defecto ya no salta al día siguiente.
+
+## 3.7 Conectar WhatsApp (una sola vez, ~20 minutos)
+
+La app ya tiene todo listo para recibir mensajes; falta crear la conexión con WhatsApp en Meta
+(gratis para uso personal). Estos pasos los tienes que hacer tú porque implican crear una cuenta y
+manejar claves.
+
+**A. Crear la app en Meta**
+
+1. Entra a [developers.facebook.com](https://developers.facebook.com) con tu Facebook → **Mis apps →
+   Crear app** → tipo **Empresa (Business)**.
+2. En la app, agrega el producto **WhatsApp** → **Configuración de la API (API Setup)**. Meta te da
+   un **número de prueba gratis**. Anota:
+   - **Phone number ID** (identificador del número).
+   - El número de prueba en sí (ej. +1 555…).
+3. En esa misma pantalla, en **Para (To)**, agrega tu celular y el de tu pareja y verifícalos con el
+   código que les llega. El número de prueba solo responde a números agregados aquí (hasta 5), que
+   para ustedes dos es suficiente.
+4. **Token permanente:** el token que aparece ahí vence en 24 horas. Para uno que no vence: Meta
+   Business Suite → **Configuración del negocio → Usuarios del sistema → Agregar** (rol
+   administrador) → **Asignar activos** (tu app, control total) → **Generar token** con los permisos
+   `whatsapp_business_messaging` y `whatsapp_business_management`, caducidad **Nunca**. Cópialo.
+5. **App Secret:** en tu app → **Configuración de la app → Básica → Clave secreta de la app → Mostrar**.
+
+**B. Poner las claves en Vercel**
+
+Vercel → tu proyecto → **Settings → Environment Variables**, agrega (entorno Production):
+
+| Nombre | Valor |
+|---|---|
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase → Project Settings → API Keys → **Legacy API keys** → `service_role` (empieza con `eyJ`). ⚠️ Es secreta: no la compartas ni la pongas con `NEXT_PUBLIC_`. |
+| `WHATSAPP_VERIFY_TOKEN` | Una palabra que inventes, ej. `finanzas-marco-2026` |
+| `WHATSAPP_APP_SECRET` | El App Secret del paso A5 |
+| `WHATSAPP_ACCESS_TOKEN` | El token permanente del paso A4 |
+| `WHATSAPP_PHONE_NUMBER_ID` | El Phone number ID del paso A2 |
+| `NEXT_PUBLIC_WHATSAPP_NUMBER` | El número de prueba, solo dígitos con código de país (ej. `15551234567`) |
+
+Luego **Deployments → los tres puntos del último → Redeploy** para que tome las claves.
+
+**C. Conectar el webhook**
+
+1. En Meta, WhatsApp → **Configuración (Configuration) → Webhook → Editar**:
+   - URL de devolución de llamada: `https://family-budget-app-umber.vercel.app/api/whatsapp`
+   - Token de verificación: la misma palabra que pusiste en `WHATSAPP_VERIFY_TOKEN`.
+2. **Verificar y guardar**. Luego, en **Campos del webhook**, suscríbete a **messages**.
+
+**D. Vincular sus celulares**
+
+En la app → **💬 WhatsApp → Generar código** y manda `vincular XXXXXX` al número de la app. Cada uno
+lo hace desde su propio celular. Desde ahí ya pueden escribir `gasolina 20`, `resumen`,
+`cuánto llevo en alimentación`, `deshacer`, etc.
+
+Si algo no responde: Vercel → **Logs** del proyecto muestra el error (casi siempre es una clave mal
+copiada o faltó el Redeploy).
+
 ## 4. Desplegar en la nube (para que ambos la usen desde el celular)
 
 La forma más simple y gratuita es con [Vercel](https://vercel.com):

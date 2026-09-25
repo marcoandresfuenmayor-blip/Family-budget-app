@@ -10,7 +10,10 @@ const links = [
   { href: "/gastos", label: "🧾 Gastos" },
   { href: "/ingresos", label: "💵 Ingresos" },
   { href: "/tarjetas", label: "💳 Tarjetas" },
-  { href: "/categorias", label: "🏷️ Categorías y límites" },
+  { href: "/pareja", label: "💞 Pareja" },
+  { href: "/promedios", label: "📈 Promedios" },
+  { href: "/whatsapp", label: "💬 WhatsApp" },
+  { href: "/categorias", label: "🏷️ Categorías" },
 ];
 
 export default function Nav() {

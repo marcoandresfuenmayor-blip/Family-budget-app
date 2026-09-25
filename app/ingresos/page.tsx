@@ -7,6 +7,7 @@ import { useTable } from "@/lib/hooks";
 import { supabase } from "@/lib/supabaseClient";
 import { IncomeEntry, IncomeSource } from "@/lib/types";
 import { formatCurrency } from "@/lib/utils";
+import { toDateKey } from "@/lib/insights";
 
 export default function IngresosPage() {
   return (
@@ -43,7 +44,7 @@ function IngresosContent() {
 
   async function markReceived(source: IncomeSource) {
     if (!householdId) return;
-    const today = new Date().toISOString().slice(0, 10);
+    const today = toDateKey(new Date());
     const monthLabel = new Date().toLocaleDateString("es-ES", { month: "long", year: "numeric" });
     await supabase.from("income_entries").insert({
       household_id: householdId,
@@ -344,7 +345,7 @@ function IncomeEntryForm({
   const [description, setDescription] = useState("");
   const [amount, setAmount] = useState("");
   const [sourceId, setSourceId] = useState("");
-  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState(() => toDateKey(new Date()));
   const [isExtra, setIsExtra] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -359,7 +360,7 @@ function IncomeEntryForm({
       setDescription("");
       setAmount("");
       setSourceId("");
-      setDate(new Date().toISOString().slice(0, 10));
+      setDate(toDateKey(new Date()));
       setIsExtra(false);
     }
   }, [editingEntry]);

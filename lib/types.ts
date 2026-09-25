@@ -10,6 +10,30 @@ export type HouseholdMember = {
   household_id: string;
   user_id: string;
   display_name: string | null;
+  free_money_allowance?: number;
+  dashboard_order?: string[] | null;
+};
+
+export type CheckinAnswer = {
+  user_id: string;
+  alignment: number;
+  tension: number;
+  note: string | null;
+};
+
+export type CheckinStatus = {
+  revealed: boolean;
+  answered: number;
+  members: number;
+  rows: CheckinAnswer[];
+};
+
+export type WhatsappLink = {
+  id: string;
+  phone: string;
+  user_id: string;
+  household_id: string;
+  created_at: string;
 };
 
 export type Category = {
@@ -76,6 +100,9 @@ export type Expense = {
   updated_at?: string | null;
   is_card_payment?: boolean;
   installment_purchase_id?: string | null;
+  recurring_expense_id?: string | null;
+  is_free_money?: boolean;
+  source?: string;
 };
 
 export type InstallmentPurchase = {

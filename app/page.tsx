@@ -20,6 +20,11 @@ import CategoryDrilldown from "@/components/CategoryDrilldown";
 import RecommendationsPanel from "@/components/RecommendationsPanel";
 import GoalsPanel from "@/components/GoalsPanel";
 import MiniPieCard from "@/components/MiniPieCard";
+import CashFlowTimeline from "@/components/CashFlowTimeline";
+import TrendChart from "@/components/TrendChart";
+import SortableSections, { mergeOrder } from "@/components/SortableSections";
+import { supabase } from "@/lib/supabaseClient";
+import { toDateKey } from "@/lib/insights";
 import { useHousehold } from "@/lib/HouseholdContext";
 import { useTable } from "@/lib/hooks";
 import {
@@ -30,8 +35,21 @@ import {
   HouseholdMember,
   IncomeEntry,
   IncomeSource,
+  InstallmentPurchase,
+  RecurringExpense,
   SavingsGoal,
 } from "@/lib/types";
+
+const DEFAULT_ORDER = [
+  "recomendaciones",
+  "alertas",
+  "flujo",
+  "graficos",
+  "tendencia",
+  "distribucion",
+  "limites",
+  "metas",
+];
 import {
   Alert,
   buildCardAlerts,
@@ -69,14 +87,24 @@ export default function DashboardPage() {
 }
 
 function DashboardContent() {
-  const { householdId } = useHousehold();
+  const { householdId, session } = useHousehold();
   const { data: categories } = useTable<Category>("categories", householdId, { column: "name" });
   const { data: budgets } = useTable<CategoryBudget>("category_budgets", householdId);
   const { data: cards } = useTable<Card>("cards", householdId, { column: "name" });
   const { data: expenses } = useTable<Expense>("expenses", householdId);
   const { data: incomeSources } = useTable<IncomeSource>("income_sources", householdId);
   const { data: incomeEntries } = useTable<IncomeEntry>("income_entries", householdId);
-  const { data: members } = useTable<HouseholdMember>("household_members", householdId);
+  const { data: members, refresh: refreshMembers } = useTable<HouseholdMember>("household_members", householdId);
+  const { data: recurringExpenses } = useTable<RecurringExpense>("recurring_expenses", householdId);
+  const { data: installmentPurchases } = useTable<InstallmentPurchase>("installment_purchases", householdId);
+
+  // Orden de secciones guardado para este usuario (cada uno tiene el suyo).
+  const myMember = members.find((m) => m.user_id === session?.user.id);
+  const dashboardOrder = mergeOrder(myMember?.dashboard_order, DEFAULT_ORDER);
+  async function saveDashboardOrder(order: string[]) {
+    await supabase.rpc("save_dashboard_order", { p_order: order });
+    await refreshMembers();
+  }
   const { data: goals, refresh: refreshGoals } = useTable<SavingsGoal>("savings_goals", householdId, {
     column: "created_at",
   });
@@ -138,6 +166,14 @@ function DashboardContent() {
     return income - spent;
   }, [incomeEntries, expenses, endOfPrevMonth]);
   const accumulatedDelta = percentChange(accumulatedBalance, prevAccumulatedBalance);
+
+  // Saldo de hoy (no del mes seleccionado): punto de partida del flujo de caja.
+  const todayKey = toDateKey(new Date());
+  const balanceToday = useMemo(() => {
+    const income = incomeEntries.filter((e) => e.entry_date <= todayKey).reduce((s, e) => s + Number(e.amount), 0);
+    const spent = expenses.filter((e) => e.expense_date <= todayKey).reduce((s, e) => s + Number(e.amount), 0);
+    return income - spent;
+  }, [incomeEntries, expenses, todayKey]);
 
   // Las alertas y recomendaciones siempre reflejan el momento actual (hoy),
   // sin importar qué mes estés revisando en el resto del dashboard.
@@ -289,124 +325,180 @@ function DashboardContent() {
         es tu colchón real disponible hasta hoy. El "Balance del mes" solo mira {monthLabel(selectedMonth)}.
       </p>
 
-      <div>
-        <h2 className="font-semibold mb-2">🔔 Alertas</h2>
-        <AlertBanner alerts={alerts} />
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="card">
-          <h2 className="font-semibold mb-3">📈 Gastado vs. límite por categoría</h2>
-          {chartData.some((d) => d.Límite > 0 || d.Gastado > 0) ? (
-            <ResponsiveContainer width="100%" height={280}>
-              <BarChart data={chartData} margin={{ left: -20 }}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="name" tick={{ fontSize: 11 }} interval={0} angle={-25} textAnchor="end" height={70} />
-                <YAxis tick={{ fontSize: 11 }} />
-                <Tooltip formatter={(v: number) => formatCurrency(v)} />
-                <Legend />
-                <Bar dataKey="Gastado" fill="#6366f1" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="Límite" fill="#e2e8f0" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          ) : (
-            <p className="text-sm text-slate-500">Aún no hay datos suficientes este mes.</p>
-          )}
-        </div>
-
-        <div className="card">
-          <h2 className="font-semibold mb-3">🥧 Distribución de gastos del mes</h2>
-          {pieData.length > 0 ? (
-            <>
-              <ResponsiveContainer width="100%" height={260}>
-                <PieChart>
-                  <Pie
-                    data={pieData}
-                    dataKey="Gastado"
-                    nameKey="name"
-                    outerRadius={100}
-                    label={(entry) => (entry.pct >= 6 ? `${entry.pct.toFixed(0)}%` : "")}
-                    labelLine={false}
-                  >
-                    {pieData.map((_, i) => (
-                      <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip
-                    formatter={(value: number, name: string, props: any) => [
-                      `${formatCurrency(value)} (${props.payload.pct.toFixed(0)}%)`,
-                      name,
-                    ]}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
-
-              {/* Leyenda propia en grilla: evita el solapamiento de la leyenda nativa de recharts */}
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-3 gap-y-1.5 mt-2">
-                {pieData
-                  .slice()
-                  .sort((a, b) => b.pct - a.pct)
-                  .map((d) => {
-                    const colorIndex = pieData.findIndex((p) => p.name === d.name);
-                    return (
-                      <div key={d.name} className="flex items-center gap-1.5 text-xs text-slate-600 min-w-0">
-                        <span
-                          className="w-2.5 h-2.5 rounded-full flex-shrink-0"
-                          style={{ backgroundColor: PIE_COLORS[colorIndex % PIE_COLORS.length] }}
-                        />
-                        <span className="truncate">{d.name}</span>
-                        <span className="text-slate-400 flex-shrink-0">{d.pct.toFixed(0)}%</span>
-                      </div>
-                    );
-                  })}
+      <SortableSections
+        order={dashboardOrder}
+        onSave={saveDashboardOrder}
+        sections={[
+          {
+            key: "recomendaciones",
+            title: "💡 Recomendaciones",
+            node: <RecommendationsPanel recs={recommendations} />,
+          },
+          {
+            key: "alertas",
+            title: "🔔 Alertas",
+            node: (
+            <div>
+              <h2 className="font-semibold mb-2">🔔 Alertas</h2>
+              <AlertBanner alerts={alerts} />
+            </div>
+            ),
+          },
+          {
+            key: "flujo",
+            title: "📆 Próximos pagos y cobros",
+            node: (
+              <CashFlowTimeline
+                startBalance={balanceToday}
+                incomeSources={incomeSources}
+                incomeEntries={incomeEntries}
+                recurringExpenses={recurringExpenses}
+                installmentPurchases={installmentPurchases}
+                expenses={expenses}
+                cards={cards}
+                categories={categories}
+              />
+            ),
+          },
+          {
+            key: "graficos",
+            title: "📈 Gastado vs. límite y distribución",
+            node: (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="card">
+                <h2 className="font-semibold mb-3">📈 Gastado vs. límite por categoría</h2>
+                {chartData.some((d) => d.Límite > 0 || d.Gastado > 0) ? (
+                  <ResponsiveContainer width="100%" height={280}>
+                    <BarChart data={chartData} margin={{ left: -20 }}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="name" tick={{ fontSize: 11 }} interval={0} angle={-25} textAnchor="end" height={70} />
+                      <YAxis tick={{ fontSize: 11 }} />
+                      <Tooltip formatter={(v: number) => formatCurrency(v)} />
+                      <Legend />
+                      <Bar dataKey="Gastado" fill="#6366f1" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="Límite" fill="#e2e8f0" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <p className="text-sm text-slate-500">Aún no hay datos suficientes este mes.</p>
+                )}
               </div>
-            </>
-          ) : (
-            <p className="text-sm text-slate-500">Registra gastos para ver la distribución.</p>
-          )}
-        </div>
-      </div>
 
-      <div>
-        <h2 className="font-semibold mb-1">👥 Distribución entre ustedes</h2>
-        <p className="text-xs text-slate-400 mb-3">
-          Gastos según quién los registró en la app, ingresos según el dueño de cada fuente, y en
-          qué se va lo que pagan con tarjeta.
-        </p>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <MiniPieCard
-            title="🧾 Gastos por persona"
-            data={expensesByPerson}
-            emptyText="Registra gastos para ver la distribución."
-          />
-          <MiniPieCard
-            title="💵 Ingresos por persona"
-            data={incomeByPerson}
-            emptyText="Registra ingresos para ver la distribución."
-          />
-          <MiniPieCard
-            title="💳 Tarjeta: en qué se va"
-            data={cardSpendByCategory}
-            emptyText="Aún no hay gastos con tarjeta este mes."
-          />
-        </div>
-      </div>
+              <div className="card">
+                <h2 className="font-semibold mb-3">🥧 Distribución de gastos del mes</h2>
+                {pieData.length > 0 ? (
+                  <>
+                    <ResponsiveContainer width="100%" height={260}>
+                      <PieChart>
+                        <Pie
+                          data={pieData}
+                          dataKey="Gastado"
+                          nameKey="name"
+                          outerRadius={100}
+                          label={(entry) => (entry.pct >= 6 ? `${entry.pct.toFixed(0)}%` : "")}
+                          labelLine={false}
+                        >
+                          {pieData.map((_, i) => (
+                            <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+                          ))}
+                        </Pie>
+                        <Tooltip
+                          formatter={(value: number, name: string, props: any) => [
+                            `${formatCurrency(value)} (${props.payload.pct.toFixed(0)}%)`,
+                            name,
+                          ]}
+                        />
+                      </PieChart>
+                    </ResponsiveContainer>
 
-      <div className="card">
-        <h2 className="font-semibold mb-1">🎯 Límites por categoría</h2>
-        <p className="text-xs text-slate-400 mb-3">Haz clic en una categoría para ver el detalle de sus gastos del mes.</p>
-        <CategoryDrilldown categories={categories} budgets={budgets} monthExpenses={monthExpenses} cards={cards} />
-      </div>
-
-      <GoalsPanel
-        goals={goals}
-        incomeEntries={incomeEntries}
-        expenses={expenses}
-        householdId={householdId}
-        onChange={refreshGoals}
+                    {/* Leyenda propia en grilla: evita el solapamiento de la leyenda nativa de recharts */}
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-3 gap-y-1.5 mt-2">
+                      {pieData
+                        .slice()
+                        .sort((a, b) => b.pct - a.pct)
+                        .map((d) => {
+                          const colorIndex = pieData.findIndex((p) => p.name === d.name);
+                          return (
+                            <div key={d.name} className="flex items-center gap-1.5 text-xs text-slate-600 min-w-0">
+                              <span
+                                className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                                style={{ backgroundColor: PIE_COLORS[colorIndex % PIE_COLORS.length] }}
+                              />
+                              <span className="truncate">{d.name}</span>
+                              <span className="text-slate-400 flex-shrink-0">{d.pct.toFixed(0)}%</span>
+                            </div>
+                          );
+                        })}
+                    </div>
+                  </>
+                ) : (
+                  <p className="text-sm text-slate-500">Registra gastos para ver la distribución.</p>
+                )}
+              </div>
+            </div>
+            ),
+          },
+          {
+            key: "tendencia",
+            title: "📉 Tendencia de gasto mes a mes",
+            node: <TrendChart expenses={expenses} categories={categories} endMonth={selectedMonth} />,
+          },
+          {
+            key: "distribucion",
+            title: "👥 Distribución entre ustedes",
+            node: (
+            <div>
+              <h2 className="font-semibold mb-1">👥 Distribución entre ustedes</h2>
+              <p className="text-xs text-slate-400 mb-3">
+                Gastos según quién los registró en la app, ingresos según el dueño de cada fuente, y en
+                qué se va lo que pagan con tarjeta.
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <MiniPieCard
+                  title="🧾 Gastos por persona"
+                  data={expensesByPerson}
+                  emptyText="Registra gastos para ver la distribución."
+                />
+                <MiniPieCard
+                  title="💵 Ingresos por persona"
+                  data={incomeByPerson}
+                  emptyText="Registra ingresos para ver la distribución."
+                />
+                <MiniPieCard
+                  title="💳 Tarjeta: en qué se va"
+                  data={cardSpendByCategory}
+                  emptyText="Aún no hay gastos con tarjeta este mes."
+                />
+              </div>
+            </div>
+            ),
+          },
+          {
+            key: "limites",
+            title: "🎯 Límites por categoría",
+            node: (
+            <div className="card">
+              <h2 className="font-semibold mb-1">🎯 Límites por categoría</h2>
+              <p className="text-xs text-slate-400 mb-3">Haz clic en una categoría para ver el detalle de sus gastos del mes.</p>
+              <CategoryDrilldown categories={categories} budgets={budgets} monthExpenses={monthExpenses} cards={cards} />
+            </div>
+            ),
+          },
+          {
+            key: "metas",
+            title: "🏆 Metas de ahorro",
+            node: (
+            <GoalsPanel
+              goals={goals}
+              incomeEntries={incomeEntries}
+              expenses={expenses}
+              householdId={householdId}
+              onChange={refreshGoals}
+            />
+            ),
+          },
+        ]}
       />
-
-      <RecommendationsPanel recs={recommendations} />
     </div>
   );
 }

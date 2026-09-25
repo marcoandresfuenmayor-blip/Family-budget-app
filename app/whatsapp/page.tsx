@@ -7,6 +7,7 @@ import { useHousehold } from "@/lib/HouseholdContext";
 import { useTable } from "@/lib/hooks";
 import { supabase } from "@/lib/supabaseClient";
 import { HouseholdMember, WhatsappLink } from "@/lib/types";
+import { PageHeader, Pill, Section } from "@/components/ui";
 
 const BOT_NUMBER = (process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || "").replace(/\D/g, "");
 const ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -70,24 +71,34 @@ function WhatsappContent() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="rounded-2xl p-5 text-white bg-gradient-to-br from-emerald-600 to-emerald-400">
-        <h1 className="text-2xl font-bold">💬 Registrar gastos por WhatsApp</h1>
-        <p className="text-sm opacity-90 mt-1">
-          Escríbele al número de la app &quot;gasolina 20&quot; y el gasto queda registrado, sin abrir nada.
-        </p>
-      </div>
+    <div className="space-y-5">
+      <PageHeader
+        icon="chat"
+        eyebrow="Configuración"
+        title="WhatsApp"
+        subtitle={<>Escríbele al número de la app &quot;gasolina 20&quot; y el gasto queda registrado, sin abrir nada</>}
+      />
 
       {!BOT_NUMBER && (
-        <div className="card bg-amber-50 border-amber-200 text-amber-900 text-sm">
+        <div className="rounded-3xl bg-amber-50 border border-amber-200 text-amber-900 text-sm p-5">
           ⚙️ <strong>Falta terminar la configuración.</strong> El número de WhatsApp de la app todavía no está conectado.
-          Sigue la sección <strong>3.6</strong> del README (crear la app en Meta y poner las variables en Vercel). Mientras
+          Sigue la sección <strong>3.7</strong> del README (crear la app en Meta y poner las variables en Vercel). Mientras
           tanto puedes generar tu código igual; funcionará apenas quede conectado.
         </div>
       )}
 
+      <Section
+        id="wa-vincular"
+        icon="link"
+        accent="emerald"
+        title="1. Vincula tu número"
+        subtitle="Cada uno vincula su propio celular con un código"
+        badge={
+          links.some((l) => l.user_id === userId) ? <Pill tone="green">Tu número está vinculado</Pill> : <Pill tone="amber">Pendiente</Pill>
+        }
+        defaultOpen={!links.some((l) => l.user_id === userId)}
+      >
       <div className="card">
-        <h2 className="font-semibold mb-1">1. Vincula tu número</h2>
         <p className="text-sm text-slate-600 mb-3">
           Cada uno vincula su propio celular. Genera un código y mándalo por WhatsApp{" "}
           {BOT_NUMBER ? (
@@ -125,8 +136,17 @@ function WhatsappContent() {
         {error && <p className="text-sm text-red-600 mt-2">{error}</p>}
       </div>
 
+      </Section>
+
+      <Section
+        id="wa-numeros"
+        icon="phone"
+        accent="teal"
+        title="2. Números vinculados"
+        subtitle="Quiénes pueden registrar gastos por WhatsApp"
+        badge={<Pill tone="slate">{links.length}</Pill>}
+      >
       <div className="card">
-        <h2 className="font-semibold mb-3">2. Números vinculados</h2>
         {links.length === 0 ? (
           <p className="text-sm text-slate-500">Todavía no hay números vinculados.</p>
         ) : (
@@ -149,8 +169,16 @@ function WhatsappContent() {
         )}
       </div>
 
+      </Section>
+
+      <Section
+        id="wa-comandos"
+        icon="chat"
+        accent="sky"
+        title="3. Qué le puedes escribir"
+        subtitle="Ejemplos de mensajes que entiende"
+      >
       <div className="card">
-        <h2 className="font-semibold mb-3">3. Qué le puedes escribir</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
           {[
             ["gasolina 20", "Registra $20; la categoría la adivina (aprende de lo que ya registraron)"],
@@ -173,6 +201,7 @@ function WhatsappContent() {
           los mandó. Fotos de recibos todavía no — viene en una próxima versión.
         </p>
       </div>
+      </Section>
     </div>
   );
 }

@@ -7,6 +7,7 @@ import { useTable } from "@/lib/hooks";
 import { supabase } from "@/lib/supabaseClient";
 import { Category, CategoryBudget, Household } from "@/lib/types";
 import { formatCurrency } from "@/lib/utils";
+import { PageHeader, Pill, Section } from "@/components/ui";
 
 export default function CategoriasPage() {
   return (
@@ -118,47 +119,22 @@ function CategoriasContent() {
   }
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-bold">🏷️ Categorías y límites de gasto</h1>
+    <div className="space-y-5">
+      <PageHeader
+        icon="tag"
+        eyebrow="Configuración"
+        title="Categorías y límites"
+        subtitle="Cómo agrupan sus gastos y cuánto se permiten gastar en cada cosa"
+      />
 
-      {household && (
-        <div className="card bg-brand-50 border-brand-100">
-          <h2 className="font-semibold mb-1">Invita a tu pareja</h2>
-          <p className="text-sm text-slate-600 mb-2">
-            Comparte este código en la app para que se una a <strong>{household.name}</strong>:
-          </p>
-          <code className="bg-white border border-brand-200 rounded px-3 py-2 inline-block text-sm select-all">
-            {household.invite_code}
-          </code>
-        </div>
-      )}
-
-      <form onSubmit={handleSubmit} className="card flex flex-wrap gap-3 items-end">
-        {editingCategory && (
-          <div className="w-full flex items-center justify-between bg-brand-50 text-brand-700 text-sm rounded-lg px-3 py-2">
-            <span>✏️ Editando: {editingCategory.icon} {editingCategory.name}</span>
-            <button type="button" onClick={() => setEditingCategory(null)} className="underline">
-              Cancelar
-            </button>
-          </div>
-        )}
-        <div className="w-20">
-          <label className="label">Ícono</label>
-          <input className="input text-center" value={icon} onChange={(e) => setIcon(e.target.value)} />
-        </div>
-        <div className="flex-1 min-w-[180px]">
-          <label className="label">{editingCategory ? "Nombre de la categoría" : "Nueva categoría"}</label>
-          <input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Ej. Mascotas" />
-        </div>
-        <label className="flex items-center gap-2 text-sm text-slate-600 mb-2">
-          <input type="checkbox" checked={isDiscretionary} onChange={(e) => setIsDiscretionary(e.target.checked)} />
-          Gasto reducible (discrecional)
-        </label>
-        <button type="submit" disabled={saving} className="btn-primary">
-          {saving ? "Guardando..." : editingCategory ? "Guardar cambios" : "Agregar categoría"}
-        </button>
-      </form>
-
+      <Section
+        id="cat-limites"
+        icon="target"
+        accent="amber"
+        title="Límites por categoría"
+        subtitle="Cuánto pueden gastar al mes y desde qué % avisar"
+        badge={<Pill tone="amber">{formatCurrency(budgets.reduce((s, b) => s + Number(b.monthly_limit), 0))}/mes</Pill>}
+      >
       <div className="card">
         <table className="w-full text-sm">
           <thead>
@@ -205,7 +181,6 @@ function CategoriasContent() {
                     <button
                       onClick={() => {
                         setEditingCategory(c);
-                        window.scrollTo({ top: 0, behavior: "smooth" });
                       }}
                       className="text-brand-600 hover:underline text-xs mr-3"
                     >
@@ -228,6 +203,63 @@ function CategoriasContent() {
           {" "}Total presupuestado: {formatCurrency(budgets.reduce((s, b) => s + Number(b.monthly_limit), 0))}
         </p>
       </div>
+      </Section>
+
+      <Section
+        id="cat-nueva"
+        icon="plus"
+        accent="indigo"
+        title={editingCategory ? `Editar categoría: ${editingCategory.name}` : "Nueva categoría"}
+        subtitle="Nombre, ícono y si es un gasto reducible"
+        openSignal={editingCategory?.id}
+        defaultOpen={false}
+      >
+      <form onSubmit={handleSubmit} className="card flex flex-wrap gap-3 items-end">
+        {editingCategory && (
+          <div className="w-full flex items-center justify-between bg-brand-50 text-brand-700 text-sm rounded-lg px-3 py-2">
+            <span>✏️ Editando: {editingCategory.icon} {editingCategory.name}</span>
+            <button type="button" onClick={() => setEditingCategory(null)} className="underline">
+              Cancelar
+            </button>
+          </div>
+        )}
+        <div className="w-20">
+          <label className="label">Ícono</label>
+          <input className="input text-center" value={icon} onChange={(e) => setIcon(e.target.value)} />
+        </div>
+        <div className="flex-1 min-w-[180px]">
+          <label className="label">{editingCategory ? "Nombre de la categoría" : "Nueva categoría"}</label>
+          <input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Ej. Mascotas" />
+        </div>
+        <label className="flex items-center gap-2 text-sm text-slate-600 mb-2">
+          <input type="checkbox" checked={isDiscretionary} onChange={(e) => setIsDiscretionary(e.target.checked)} />
+          Gasto reducible (discrecional)
+        </label>
+        <button type="submit" disabled={saving} className="btn-primary">
+          {saving ? "Guardando..." : editingCategory ? "Guardar cambios" : "Agregar categoría"}
+        </button>
+      </form>
+      </Section>
+
+      {household && (
+        <Section
+          id="cat-invitar"
+          icon="userPlus"
+          accent="pink"
+          title="Invita a tu pareja"
+          subtitle="Código para unirse a este hogar"
+          defaultOpen={false}
+        >
+        <div className="card">
+          <p className="text-sm text-slate-600 mb-2">
+            Comparte este código en la app para que se una a <strong>{household.name}</strong>:
+          </p>
+          <code className="bg-white border border-brand-200 rounded px-3 py-2 inline-block text-sm select-all">
+            {household.invite_code}
+          </code>
+        </div>
+        </Section>
+      )}
     </div>
   );
 }

@@ -3,7 +3,8 @@
 @tailwind utilities;
 
 body {
-  @apply bg-slate-50 text-slate-900 font-sans;
+  @apply text-slate-900 font-sans antialiased;
+  background: #f4f6fb;
 }
 
 @layer base {
@@ -15,7 +16,7 @@ body {
 }
 
 .card {
-  @apply bg-white rounded-2xl shadow-sm border border-slate-200 p-5 transition-shadow hover:shadow-md;
+  @apply bg-white rounded-2xl shadow-sm border border-slate-200/70 p-5 transition-shadow hover:shadow-md;
 }
 
 .btn-primary {
@@ -27,9 +28,28 @@ body {
 }
 
 .input {
-  @apply border border-slate-300 rounded-xl px-3 py-2 w-full focus:outline-none focus:ring-2 focus:ring-brand-500;
+  @apply border border-slate-300 rounded-xl px-3 py-2 w-full bg-white focus:outline-none focus:ring-2 focus:ring-brand-500;
 }
 
 .label {
   @apply block text-sm font-medium text-slate-600 mb-1;
+}
+
+/* Dentro de una sección plegable, la tarjeta interna se funde con la
+   sección (evita "caja dentro de caja"). */
+.section-body > .card,
+.section-body > form.card {
+  @apply border-0 shadow-none p-0 rounded-none bg-transparent;
+}
+.section-body > .card:hover,
+.section-body > form.card:hover {
+  box-shadow: none;
+}
+
+/* Controles sobre el encabezado de color */
+.header-actions .input {
+  @apply bg-white/95 border-white/40 text-slate-800 shadow-sm;
+}
+.header-actions .btn-secondary {
+  @apply bg-white/15 text-white hover:bg-white/25 ring-1 ring-white/25 disabled:opacity-40;
 }

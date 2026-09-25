@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { useHousehold } from "@/lib/HouseholdContext";
+import { Icon } from "@/components/ui";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -46,9 +47,16 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-brand-gradient px-4">
-      <div className="card w-full max-w-sm">
-        <h1 className="text-2xl font-heading font-bold mb-1 text-center">💰 Finanzas Familiares</h1>
+    <div className="fixed inset-0 overflow-y-auto flex items-center justify-center bg-brand-gradient px-4 py-10">
+      <div className="absolute -left-24 -top-24 w-96 h-96 rounded-full bg-white/10" aria-hidden />
+      <div className="absolute -right-24 -bottom-32 w-[28rem] h-[28rem] rounded-full bg-white/10" aria-hidden />
+      <div className="relative bg-white rounded-3xl shadow-2xl p-7 w-full max-w-sm">
+        <div className="flex justify-center mb-4">
+          <span className="w-14 h-14 rounded-2xl bg-brand-gradient flex items-center justify-center text-white shadow-lg shadow-indigo-500/30">
+            <Icon name="wallet" className="w-7 h-7" />
+          </span>
+        </div>
+        <h1 className="text-2xl font-heading font-bold mb-1 text-center">Finanzas Familiares</h1>
         <p className="text-center text-sm text-slate-500 mb-6">
           {mode === "login" ? "Inicia sesión" : "Crea tu cuenta"}
         </p>

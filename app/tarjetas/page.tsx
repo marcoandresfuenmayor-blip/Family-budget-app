@@ -7,6 +7,7 @@ import { useTable } from "@/lib/hooks";
 import { supabase } from "@/lib/supabaseClient";
 import { Card, Category, Expense } from "@/lib/types";
 import { cardCycleSpend, cardClosedCycleDue, formatCurrency, nextOccurrence } from "@/lib/utils";
+import { PageHeader, Pill, Section } from "@/components/ui";
 
 export default function TarjetasPage() {
   return (
@@ -89,9 +90,46 @@ function TarjetasContent() {
   }
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-bold">💳 Tarjetas de crédito</h1>
+    <div className="space-y-5">
+      <PageHeader
+        icon="card"
+        eyebrow="Crédito"
+        title="Tarjetas"
+        subtitle="Cortes, pagos y cuánto deben en cada tarjeta"
+      />
 
+      <Section
+        id="tarjetas-lista"
+        icon="card"
+        accent="violet"
+        title="Mis tarjetas"
+        subtitle="Lo que toca pagar y lo que se va acumulando"
+        badge={
+          <Pill tone="amber">
+            {formatCurrency(cards.reduce((t, c) => t + cardClosedCycleDue(expenses, c.id, c.closing_day), 0))} por pagar
+          </Pill>
+        }
+      >
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {loading ? (
+          <p className="text-slate-500 text-sm">Cargando...</p>
+        ) : cards.length === 0 ? (
+          <p className="text-slate-500 text-sm">Aún no has agregado tarjetas.</p>
+        ) : (
+          cards.map((card) => renderCard(card))
+        )}
+      </div>
+      </Section>
+
+      <Section
+        id="tarjetas-form"
+        icon="plus"
+        accent="indigo"
+        title={editingCard ? `Editar tarjeta: ${editingCard.name}` : "Agregar tarjeta"}
+        subtitle="Día de corte, día de pago, límite y auto-pago"
+        openSignal={editingCard?.id}
+        defaultOpen={false}
+      >
       <form onSubmit={handleSubmit} className="card grid grid-cols-1 md:grid-cols-5 gap-3 items-end">
         {editingCard && (
           <div className="md:col-span-5 flex items-center justify-between bg-brand-50 text-brand-700 text-sm rounded-lg px-3 py-2">
@@ -131,6 +169,7 @@ function TarjetasContent() {
               onChange={(e) => setAutoPostPayment(e.target.checked)}
             />
             💳 Registrar el pago automáticamente en su fecha de pago
+            <span className="text-xs text-amber-600">(por ahora mejor apagado: el gasto se contaría dos veces)</span>
           </label>
           <div>
             <label className="label">Categoría del pago</label>
@@ -157,14 +196,12 @@ function TarjetasContent() {
         )}
         {error && <p className="md:col-span-5 text-sm text-red-600">{error}</p>}
       </form>
+      </Section>
+    </div>
+  );
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {loading ? (
-          <p className="text-slate-500 text-sm">Cargando...</p>
-        ) : cards.length === 0 ? (
-          <p className="text-slate-500 text-sm">Aún no has agregado tarjetas.</p>
-        ) : (
-          cards.map((card) => {
+  function renderCard(card: Card) {
+    {
             const closing = nextOccurrence(card.closing_day);
             const payment = nextOccurrence(card.payment_day);
             const cycleSpend = cardCycleSpend(expenses, card.id, card.closing_day);
@@ -190,30 +227,29 @@ function TarjetasContent() {
                 : "bg-emerald-500";
             return (
               <div key={card.id} className={`card ${editingCard?.id === card.id ? "ring-2 ring-brand-400" : ""}`}>
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="font-semibold">💳 {card.name}</h3>
-                  <div className="flex items-center gap-2">
+                <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-800 via-indigo-900 to-violet-800 text-white p-4 mb-3 shadow-lg">
+                  <span className="absolute -right-8 -top-8 w-28 h-28 rounded-full bg-white/10" aria-hidden />
+                  <span className="absolute right-10 -bottom-10 w-24 h-24 rounded-full bg-white/5" aria-hidden />
+                  <div className="relative flex items-center justify-between">
+                    <span className="w-9 h-6 rounded-md bg-gradient-to-br from-amber-200 to-amber-400 opacity-90" aria-hidden />
                     {utilizationPct !== null && (
-                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${pillColor}`}>
+                      <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${pillColor}`}>
                         {utilizationPct.toFixed(0)}% del límite
                       </span>
                     )}
-                    <button
-                      onClick={() => {
-                        setEditingCard(card);
-                        window.scrollTo({ top: 0, behavior: "smooth" });
-                      }}
-                      className="text-brand-600 hover:underline text-xs"
-                    >
-                      editar
-                    </button>
-                    <button
-                      onClick={() => handleDelete(card.id)}
-                      className="text-red-500 hover:underline text-xs"
-                    >
-                      eliminar
-                    </button>
                   </div>
+                  <p className="relative text-lg font-bold mt-4 tracking-wide">{card.name}</p>
+                  <p className="relative text-xs text-white/60">
+                    Corte día {card.closing_day} · Pago día {card.payment_day}
+                  </p>
+                </div>
+                <div className="flex justify-end gap-3 mb-2 -mt-1">
+                  <button onClick={() => setEditingCard(card)} className="text-brand-600 hover:underline text-xs">
+                    editar
+                  </button>
+                  <button onClick={() => handleDelete(card.id)} className="text-red-500 hover:underline text-xs">
+                    eliminar
+                  </button>
                 </div>
 
                 <div className="bg-amber-50 border border-amber-100 rounded-xl p-3 mb-2">
@@ -267,9 +303,6 @@ function TarjetasContent() {
                 </div>
               </div>
             );
-          })
-        )}
-      </div>
-    </div>
-  );
+    }
+  }
 }

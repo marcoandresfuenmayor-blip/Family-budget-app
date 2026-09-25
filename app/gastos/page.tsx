@@ -7,7 +7,8 @@ import { useHousehold } from "@/lib/HouseholdContext";
 import { useTable } from "@/lib/hooks";
 import { supabase } from "@/lib/supabaseClient";
 import { Card, Category, Expense, HouseholdMember, InstallmentPurchase, RecurringExpense } from "@/lib/types";
-import { formatCurrency, nextOccurrence } from "@/lib/utils";
+import { formatCurrency, monthLabel, nextOccurrence } from "@/lib/utils";
+import { PageHeader, Pill, Section, Tip } from "@/components/ui";
 import { monthEndKey, toDateKey } from "@/lib/insights";
 
 export default function GastosPage() {
@@ -128,7 +129,6 @@ function GastosContent() {
 
   function handleEdit(expense: Expense) {
     setEditingExpense(expense);
-    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   async function registerNow(tpl: RecurringExpense) {
@@ -197,17 +197,30 @@ function GastosContent() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <h1 className="text-2xl font-bold">🧾 Gastos mensuales</h1>
-        <input
-          type="month"
-          className="input !w-auto"
-          value={monthFilter}
-          onChange={(e) => setMonthFilter(e.target.value)}
-        />
-      </div>
+    <div className="space-y-5">
+      <PageHeader
+        icon="receipt"
+        eyebrow="Movimientos"
+        title="Gastos"
+        subtitle="Registra, revisa y automatiza los gastos del hogar"
+        actions={
+          <input
+            type="month"
+            className="input !w-auto"
+            value={monthFilter}
+            onChange={(e) => setMonthFilter(e.target.value)}
+          />
+        }
+      />
 
+      <Section
+        id="gastos-registrar"
+        icon="plus"
+        accent="rose"
+        title={editingExpense ? "Editar gasto" : "Registrar gasto"}
+        subtitle="Descripción, monto, categoría y tarjeta"
+        openSignal={editingExpense?.id}
+      >
       <ExpenseForm
         categories={categories}
         cards={cards}
@@ -220,14 +233,17 @@ function GastosContent() {
           refresh();
         }}
       />
+      </Section>
 
+      <Section
+        id="gastos-lista"
+        icon="list"
+        accent="indigo"
+        title={<span className="capitalize">Gastos de {monthLabel(monthFilter)}</span>}
+        subtitle={`${filtered.length} registro${filtered.length === 1 ? "" : "s"} · toca un encabezado para ordenar`}
+        badge={<Pill tone="indigo">{formatCurrency(total)}</Pill>}
+      >
       <div className="card">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="font-semibold">
-            Gastos de {monthFilter} <span className="text-slate-400 font-normal">({filtered.length})</span>
-          </h2>
-          <span className="font-semibold text-brand-700">{formatCurrency(total)}</span>
-        </div>
 
         {loading ? (
           <p className="text-slate-500 text-sm">Cargando...</p>
@@ -352,14 +368,28 @@ function GastosContent() {
           </div>
         )}
       </div>
+      </Section>
 
-      <div className="card bg-sky-50 border-sky-200 text-sky-900 text-sm">
-        💡 <strong>¿Cómo funciona esto?</strong> Los "gastos fijos recurrentes" de abajo son
+      <Section
+        id="gastos-fijos"
+        icon="repeat"
+        accent="violet"
+        title="Gastos fijos recurrentes"
+        subtitle="Se registran solos cada mes, el día que elijas"
+        badge={
+          <Pill tone="indigo">
+            {formatCurrency(recurringExpenses.filter((t) => t.active).reduce((s, t) => s + Number(t.amount), 0))}/mes
+          </Pill>
+        }
+        defaultOpen={false}
+      >
+      <Tip>
+        <strong>¿Cómo funciona esto?</strong> Los "gastos fijos recurrentes" de abajo son
         plantillas: tú eliges cuáles se auto-repiten cada mes. Si activaste el auto-registro (ver
         README), se registran solos el día que corresponda; si no, usa{" "}
         <strong>"⚡ Registrar ahora"</strong>. Los gastos marcados como "fijo" en el formulario de
         arriba NO se repiten solos — son de un solo mes, a menos que los crees como plantilla aquí.
-      </div>
+      </Tip>
 
       <RecurringExpenseManager
         recurringExpenses={recurringExpenses}
@@ -369,13 +399,28 @@ function GastosContent() {
         onChange={refreshRecurring}
         onRegisterNow={registerNow}
       />
+      </Section>
 
-      <div className="card bg-violet-50 border-violet-200 text-violet-900 text-sm">
-        💡 <strong>Compras diferidas a cuotas:</strong> úsalo cuando pagas algo "a meses" con la
+      <Section
+        id="gastos-cuotas"
+        icon="calendar"
+        accent="amber"
+        title="Compras diferidas a cuotas"
+        subtitle="Compras a meses: una cuota por cada corte de la tarjeta"
+        badge={
+          <Pill tone="amber">
+            {installmentPurchases.filter((i) => i.active).length} activa
+            {installmentPurchases.filter((i) => i.active).length === 1 ? "" : "s"}
+          </Pill>
+        }
+        defaultOpen={false}
+      >
+      <Tip>
+        <strong>Compras diferidas a cuotas:</strong> úsalo cuando pagas algo "a meses" con la
         tarjeta. Ingresas el monto de cada cuota y a cuántos meses la difieres; la primera cuota se
         registra sola en el próximo corte de esa tarjeta, y una cuota más en cada corte siguiente,
         hasta completar el plazo — sin que tengas que acordarte de anotarla cada mes.
-      </div>
+      </Tip>
 
       <InstallmentManager
         installmentPurchases={installmentPurchases}
@@ -385,6 +430,7 @@ function GastosContent() {
         onChange={refreshInstallments}
         onRegisterNow={registerInstallmentNow}
       />
+      </Section>
     </div>
   );
 }
@@ -517,12 +563,9 @@ function RecurringExpenseManager({
   return (
     <div className="card">
       <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
-        <h2 className="font-semibold">
-          🔁 Gastos fijos recurrentes{" "}
-          <span className="text-slate-400 font-normal">
-            ({activeCount} activo{activeCount === 1 ? "" : "s"})
-          </span>
-        </h2>
+        <span className="text-sm text-slate-500">
+          {activeCount} plantilla{activeCount === 1 ? "" : "s"} activa{activeCount === 1 ? "" : "s"}
+        </span>
         <span className="font-semibold text-brand-700">
           Total fijos activos: {formatCurrency(activeTotal)}
         </span>
@@ -813,12 +856,9 @@ function InstallmentManager({
   return (
     <div className="card">
       <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
-        <h2 className="font-semibold">
-          🗓️ Compras diferidas a cuotas{" "}
-          <span className="text-slate-400 font-normal">
-            ({activeCount} activa{activeCount === 1 ? "" : "s"})
-          </span>
-        </h2>
+        <span className="text-sm text-slate-500">
+          {activeCount} compra{activeCount === 1 ? "" : "s"} activa{activeCount === 1 ? "" : "s"}
+        </span>
         <span className="font-semibold text-violet-700">
           Total cuotas activas: {formatCurrency(activeTotal)}/mes
         </span>

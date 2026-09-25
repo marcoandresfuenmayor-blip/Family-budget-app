@@ -2,48 +2,94 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ReactNode, useEffect, useState } from "react";
+import { ReactNode, useEffect, useRef, useState } from "react";
 import { useHousehold } from "@/lib/HouseholdContext";
 import Avatar from "@/components/Avatar";
+import { Icon, IconName } from "@/components/ui";
 
-const links = [
-  { href: "/", icon: "📊", label: "Dashboard" },
-  { href: "/gastos", icon: "🧾", label: "Gastos" },
-  { href: "/ingresos", icon: "💵", label: "Ingresos" },
-  { href: "/tarjetas", icon: "💳", label: "Tarjetas" },
-  { href: "/pareja", icon: "💞", label: "Pareja" },
-  { href: "/promedios", icon: "📈", label: "Promedios" },
-  { href: "/whatsapp", icon: "💬", label: "WhatsApp" },
-  { href: "/categorias", icon: "🏷️", label: "Categorías y límites" },
+const groups: { label: string; links: { href: string; icon: IconName; label: string }[] }[] = [
+  {
+    label: "General",
+    links: [
+      { href: "/", icon: "dashboard", label: "Dashboard" },
+      { href: "/gastos", icon: "receipt", label: "Gastos" },
+      { href: "/ingresos", icon: "wallet", label: "Ingresos" },
+      { href: "/tarjetas", icon: "card", label: "Tarjetas" },
+    ],
+  },
+  {
+    label: "Análisis",
+    links: [
+      { href: "/promedios", icon: "chart", label: "Promedios" },
+      { href: "/pareja", icon: "heart", label: "Pareja" },
+    ],
+  },
+  {
+    label: "Configuración",
+    links: [
+      { href: "/whatsapp", icon: "chat", label: "WhatsApp" },
+      { href: "/categorias", icon: "tag", label: "Categorías y límites" },
+    ],
+  },
 ];
 
 const PIN_KEY = "ff-menu-fijado";
 
-// Estructura de la app: barra superior con botón ☰ y un menú lateral
-// izquierdo que se abre/cierra. En computador se puede "fijar" abierto.
+function Logo({ dark = false }: { dark?: boolean }) {
+  return (
+    <span className="flex items-center gap-2.5">
+      <span className="w-9 h-9 rounded-xl bg-brand-gradient flex items-center justify-center text-white shadow-lg shadow-indigo-500/30">
+        <Icon name="wallet" className="w-5 h-5" />
+      </span>
+      <span className="leading-tight">
+        <span className={`block font-heading font-bold text-[15px] ${dark ? "text-white" : "text-slate-900"}`}>Finanzas</span>
+        <span className={`block text-[11px] font-medium tracking-wide ${dark ? "text-slate-400" : "text-slate-500"}`}>
+          Familiares
+        </span>
+      </span>
+    </span>
+  );
+}
+
+// Estructura de la app: barra superior y menú lateral que se abre con el
+// botón (en computador se puede "fijar" abierto).
 export default function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const { session, displayName, signOut } = useHousehold();
   const [open, setOpen] = useState(false);
   const [pinned, setPinned] = useState(false);
+  const [userMenu, setUserMenu] = useState(false);
+  const userRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     try {
       setPinned(localStorage.getItem(PIN_KEY) === "1");
     } catch {
-      /* sin almacenamiento: queda sin fijar */
+      /* sin almacenamiento */
     }
   }, []);
 
-  // Al cambiar de página se cierra el menú (si no está fijado).
   useEffect(() => {
     setOpen(false);
+    setUserMenu(false);
   }, [pathname]);
 
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setOpen(false);
+        setUserMenu(false);
+      }
+    };
+    const onClick = (e: MouseEvent) => {
+      if (userRef.current && !userRef.current.contains(e.target as Node)) setUserMenu(false);
+    };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    window.addEventListener("mousedown", onClick);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("mousedown", onClick);
+    };
   }, []);
 
   function togglePin() {
@@ -62,49 +108,64 @@ export default function AppShell({ children }: { children: ReactNode }) {
   }
 
   const name = displayName ?? session.user.email ?? "?";
-  const current = links.find((l) => l.href === pathname);
+  const today = new Date().toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long" });
 
   const menu = (
-    <nav className="flex flex-col h-full">
-      <div className="px-4 py-4 border-b border-slate-100 flex items-center justify-between">
-        <span className="font-heading font-bold text-brand-700">💰 Finanzas Familiares</span>
+    <nav className="flex flex-col h-full bg-slate-900 text-slate-300">
+      <div className="px-5 h-16 flex items-center justify-between border-b border-white/5">
+        <Logo dark />
         <button
           onClick={() => setOpen(false)}
-          className={`w-8 h-8 rounded-lg hover:bg-slate-100 text-slate-500 ${pinned ? "lg:hidden" : ""}`}
+          className={`w-8 h-8 rounded-lg hover:bg-white/10 text-slate-400 flex items-center justify-center ${pinned ? "lg:hidden" : ""}`}
           aria-label="Cerrar menú"
         >
-          ✕
+          <Icon name="x" className="w-4 h-4" />
         </button>
       </div>
-      <div className="flex-1 overflow-y-auto p-3 space-y-1">
-        {links.map((l) => {
-          const active = pathname === l.href;
-          return (
-            <Link
-              key={l.href}
-              href={l.href}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${
-                active ? "bg-brand-gradient text-white shadow-sm" : "text-slate-700 hover:bg-slate-100"
-              }`}
-            >
-              <span className="text-lg w-6 text-center">{l.icon}</span>
-              {l.label}
-            </Link>
-          );
-        })}
+      <div className="flex-1 overflow-y-auto px-3 py-4 space-y-5">
+        {groups.map((g) => (
+          <div key={g.label}>
+            <p className="px-3 mb-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">{g.label}</p>
+            <div className="space-y-0.5">
+              {g.links.map((l) => {
+                const active = pathname === l.href;
+                return (
+                  <Link
+                    key={l.href}
+                    href={l.href}
+                    className={`relative flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${
+                      active ? "bg-white/10 text-white" : "hover:bg-white/5 hover:text-white"
+                    }`}
+                  >
+                    {active && <span className="absolute left-0 top-2 bottom-2 w-1 rounded-r-full bg-brand-gradient" />}
+                    <span
+                      className={`w-8 h-8 rounded-lg flex items-center justify-center ${
+                        active ? "bg-brand-gradient text-white shadow-lg shadow-indigo-500/30" : "bg-white/5 text-slate-400"
+                      }`}
+                    >
+                      <Icon name={l.icon} className="w-4 h-4" />
+                    </span>
+                    {l.label}
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        ))}
       </div>
-      <div className="p-3 border-t border-slate-100 space-y-2">
+      <div className="p-3 border-t border-white/5 space-y-1">
         <button
           onClick={togglePin}
-          className="hidden lg:flex w-full items-center gap-2 px-3 py-2 rounded-xl text-xs text-slate-500 hover:bg-slate-100"
+          className="hidden lg:flex w-full items-center gap-2 px-3 py-2 rounded-xl text-xs text-slate-400 hover:bg-white/5 hover:text-white"
         >
-          📌 {pinned ? "Soltar menú (que se oculte)" : "Fijar menú abierto"}
+          <Icon name="pin" className="w-4 h-4" />
+          {pinned ? "Ocultar menú lateral" : "Fijar menú abierto"}
         </button>
-        <div className="flex items-center gap-2 px-2">
+        <div className="flex items-center gap-2.5 px-3 py-2 rounded-xl bg-white/5">
           <Avatar name={name} size="sm" />
-          <span className="text-sm text-slate-700 truncate flex-1">{name}</span>
-          <button onClick={signOut} className="text-xs font-medium text-red-500 hover:underline">
-            Salir
+          <span className="text-sm text-white truncate flex-1">{name}</span>
+          <button onClick={signOut} className="text-slate-400 hover:text-rose-400" aria-label="Salir" title="Salir">
+            <Icon name="logout" className="w-4 h-4" />
           </button>
         </div>
       </div>
@@ -113,22 +174,16 @@ export default function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="min-h-screen">
-      {/* Menú fijado (solo computador) */}
-      {pinned && (
-        <aside className="hidden lg:block fixed inset-y-0 left-0 w-64 bg-white border-r border-slate-200 z-30">
-          {menu}
-        </aside>
-      )}
+      {pinned && <aside className="hidden lg:block fixed inset-y-0 left-0 w-64 z-30">{menu}</aside>}
 
-      {/* Menú desplegable */}
       <div
-        className={`fixed inset-0 z-40 bg-slate-900/40 transition-opacity ${
+        className={`fixed inset-0 z-40 bg-slate-900/50 backdrop-blur-sm transition-opacity ${
           open ? "opacity-100" : "opacity-0 pointer-events-none"
         } ${pinned ? "lg:hidden" : ""}`}
         onClick={() => setOpen(false)}
       />
       <aside
-        className={`fixed inset-y-0 left-0 w-72 max-w-[85vw] bg-white shadow-2xl z-50 transition-transform duration-200 ${
+        className={`fixed inset-y-0 left-0 w-72 max-w-[85vw] z-50 shadow-2xl transition-transform duration-300 ${
           open ? "translate-x-0" : "-translate-x-full"
         } ${pinned ? "lg:hidden" : ""}`}
         aria-hidden={!open}
@@ -137,30 +192,56 @@ export default function AppShell({ children }: { children: ReactNode }) {
       </aside>
 
       <div className={pinned ? "lg:pl-64" : ""}>
-        <header className="bg-brand-gradient shadow-md sticky top-0 z-20">
-          <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
-            <div className="flex items-center gap-3 min-w-0">
+        <header className="sticky top-0 z-20 bg-white/80 backdrop-blur-md border-b border-slate-200/70">
+          <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
               <button
                 onClick={() => setOpen(true)}
-                className={`flex items-center gap-2 bg-white/15 hover:bg-white/25 text-white font-medium px-3 py-1.5 rounded-xl transition-colors ${
+                className={`w-10 h-10 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 flex items-center justify-center shadow-sm ${
                   pinned ? "lg:hidden" : ""
                 }`}
                 aria-label="Abrir menú"
               >
-                <span className="text-lg leading-none">☰</span>
-                <span className="text-sm hidden sm:inline">Menú</span>
+                <Icon name="menu" className="w-5 h-5" />
               </button>
-              <span className="font-heading font-bold text-white text-lg drop-shadow-sm truncate">
-                {current ? `${current.icon} ${current.label}` : "💰 Finanzas Familiares"}
-              </span>
+              <Link href="/" className={pinned ? "lg:hidden" : ""}>
+                <Logo />
+              </Link>
             </div>
-            <div className="flex items-center gap-2 text-sm flex-shrink-0">
-              <Avatar name={name} size="sm" />
-              <span className="text-white/85 hidden sm:inline">{name}</span>
+            <div className="flex items-center gap-3">
+              <span className="hidden md:inline-flex items-center gap-2 text-xs font-medium text-slate-500 bg-slate-100 px-3 py-1.5 rounded-full capitalize">
+                <Icon name="calendar" className="w-3.5 h-3.5" />
+                {today}
+              </span>
+              <div className="relative" ref={userRef}>
+                <button
+                  onClick={() => setUserMenu((v) => !v)}
+                  className="flex items-center gap-2 pl-1 pr-2 py-1 rounded-full hover:bg-slate-100 transition-colors"
+                >
+                  <Avatar name={name} size="md" />
+                  <span className="hidden sm:block text-sm font-medium text-slate-700 max-w-[140px] truncate">{name}</span>
+                  <Icon name="chevronDown" className="w-4 h-4 text-slate-400" />
+                </button>
+                {userMenu && (
+                  <div className="absolute right-0 mt-2 w-56 bg-white rounded-2xl shadow-xl border border-slate-200/70 p-2">
+                    <div className="px-3 py-2 border-b border-slate-100 mb-1">
+                      <p className="text-sm font-semibold text-slate-800 truncate">{name}</p>
+                      <p className="text-xs text-slate-500 truncate">{session.user.email}</p>
+                    </div>
+                    <button
+                      onClick={signOut}
+                      className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-sm text-rose-600 hover:bg-rose-50"
+                    >
+                      <Icon name="logout" className="w-4 h-4" />
+                      Cerrar sesión
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </header>
-        <main className="max-w-6xl mx-auto px-4 py-6">{children}</main>
+        <main className="max-w-6xl mx-auto px-4 py-6 space-y-0">{children}</main>
       </div>
     </div>
   );

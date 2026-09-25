@@ -22,9 +22,10 @@ import GoalsPanel from "@/components/GoalsPanel";
 import MiniPieCard from "@/components/MiniPieCard";
 import CashFlowTimeline from "@/components/CashFlowTimeline";
 import TrendChart from "@/components/TrendChart";
-import SortableSections, { mergeOrder } from "@/components/SortableSections";
+import SectionMosaic, { mergeOrder } from "@/components/SectionMosaic";
+import { Accent, IconName, IconTile, PageHeader, Icon } from "@/components/ui";
 import { supabase } from "@/lib/supabaseClient";
-import { toDateKey } from "@/lib/insights";
+import { buildCashFlow, monthlySpendSeries, toDateKey } from "@/lib/insights";
 import { useHousehold } from "@/lib/HouseholdContext";
 import { useTable } from "@/lib/hooks";
 import {
@@ -56,6 +57,7 @@ import {
   buildCategoryAlerts,
   buildIncomeAlerts,
   buildRecommendations,
+  computeGoalProgress,
   formatCurrency,
   isInMonth,
   monthLabel,
@@ -249,101 +251,196 @@ function DashboardContent() {
     return Array.from(totals, ([name, value]) => ({ name, value }));
   }, [monthExpenses, categories]);
 
+  // ---- Datos clave de cada mosaico -------------------------------------
+  const money0 = (n: number) =>
+    new Intl.NumberFormat("es-ES", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(n || 0);
+
+  const flow = useMemo(
+    () =>
+      buildCashFlow({
+        startBalance: balanceToday,
+        incomeSources,
+        incomeEntries,
+        recurringExpenses,
+        installmentPurchases,
+        expenses,
+        cards,
+        categories,
+        days: 30,
+      }),
+    [balanceToday, incomeSources, incomeEntries, recurringExpenses, installmentPurchases, expenses, cards, categories]
+  );
+  const weekLimit = toDateKey(new Date(Date.now() + 6 * 86400000));
+  const outNext7 = flow.events
+    .filter((e) => !e.informative && e.amount < 0 && e.date <= weekLimit)
+    .reduce((s, e) => s + Math.abs(e.amount), 0);
+  const flowRisk = flow.lowest.balance < 0;
+
+  const trendSeries = useMemo(() => monthlySpendSeries(expenses, selectedMonth, 12), [expenses, selectedMonth]);
+  const trendPrev = trendSeries.slice(0, -1);
+  const trendAvg = trendPrev.length ? trendPrev.reduce((s, p) => s + p.total, 0) / trendPrev.length : 0;
+  const trendLast = trendSeries[trendSeries.length - 1]?.total ?? 0;
+  const trendPct = trendAvg > 0 ? ((trendLast - trendAvg) / trendAvg) * 100 : null;
+
+  const budgetedLimit = chartData.reduce((s, d) => s + (d.Límite > 0 ? d.Límite : 0), 0);
+  const budgetedSpent = chartData.reduce((s, d) => s + (d.Límite > 0 ? d.Gastado : 0), 0);
+  const budgetPct = budgetedLimit > 0 ? (budgetedSpent / budgetedLimit) * 100 : null;
+
+  const topPerson = expensesByPerson.slice().sort((a, b) => b.value - a.value)[0];
+  const topPersonPct = topPerson && totalSpent > 0 ? (topPerson.value / totalSpent) * 100 : null;
+
+  const firstGoal = goals[0];
+  const goalProgress = firstGoal ? computeGoalProgress(firstGoal, incomeEntries, expenses) : null;
+  const redAlerts = alerts.some((a) => a.level === "red");
+
+  const sectionMeta: Record<string, { icon: IconName; accent: Accent; value: string; caption: string; progress?: number | null; tone?: "bad" | "good" | "neutral" }> = {
+    recomendaciones: {
+      icon: "bulb",
+      accent: "indigo",
+      value: String(recommendations.length),
+      caption: recommendations.length === 1 ? "idea para ahorrar" : "ideas para ahorrar",
+    },
+    alertas: {
+      icon: "bell",
+      accent: "rose",
+      value: String(alerts.length),
+      caption: alerts.length ? "requieren atención" : "todo tranquilo",
+      tone: redAlerts ? "bad" : alerts.length ? "neutral" : "good",
+    },
+    flujo: {
+      icon: "calendar",
+      accent: "sky",
+      value: money0(outNext7),
+      caption: flowRisk ? "salen en 7 días · ⚠ saldo en riesgo" : "salen en los próximos 7 días",
+      tone: flowRisk ? "bad" : "neutral",
+    },
+    graficos: {
+      icon: "pie",
+      accent: "violet",
+      value: money0(totalSpent),
+      caption: totalIncome > 0 ? `gastado · ${((totalSpent / totalIncome) * 100).toFixed(0)}% de lo ingresado` : "gastado este mes",
+    },
+    tendencia: {
+      icon: "trend",
+      accent: "pink",
+      value: trendPct === null ? "—" : `${trendPct > 0 ? "+" : ""}${trendPct.toFixed(0)}%`,
+      caption: trendPct === null ? "aún sin historial" : "vs. su promedio mensual",
+      tone: trendPct === null ? "neutral" : trendPct > 0 ? "bad" : "good",
+    },
+    distribucion: {
+      icon: "users",
+      accent: "teal",
+      value: topPersonPct === null ? "—" : `${topPersonPct.toFixed(0)}%`,
+      caption: topPerson ? `de los gastos registró ${topPerson.name}` : "sin gastos este mes",
+    },
+    limites: {
+      icon: "target",
+      accent: "amber",
+      value: budgetPct === null ? "—" : `${budgetPct.toFixed(0)}%`,
+      caption:
+        budgetPct === null
+          ? "define límites en Categorías"
+          : overLimitCount
+          ? `del presupuesto · ${overLimitCount} excedida${overLimitCount === 1 ? "" : "s"}`
+          : "del presupuesto usado",
+      progress: budgetPct,
+      tone: overLimitCount ? "bad" : "neutral",
+    },
+    metas: {
+      icon: "star",
+      accent: "emerald",
+      value: goalProgress ? `${goalProgress.pct.toFixed(0)}%` : "—",
+      caption: firstGoal ? firstGoal.name : "crea su primera meta",
+      progress: goalProgress ? goalProgress.pct : null,
+      tone: "neutral",
+    },
+  };
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <h1 className="text-2xl font-bold">
-          📊 Dashboard familiar <span className="text-base font-normal text-slate-400">— {monthLabel(selectedMonth)}</span>
-        </h1>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setSelectedMonth(shiftMonth(selectedMonth, -1))}
-            className="btn-secondary !px-2 !py-1.5"
-            aria-label="Mes anterior"
-          >
-            ←
-          </button>
-          <input
-            type="month"
-            className="input !w-auto"
-            value={selectedMonth}
-            onChange={(e) => setSelectedMonth(e.target.value)}
-          />
-          <button
-            onClick={() => setSelectedMonth(shiftMonth(selectedMonth, 1))}
-            disabled={isCurrentMonthSelected}
-            className="btn-secondary !px-2 !py-1.5"
-            aria-label="Mes siguiente"
-          >
-            →
-          </button>
-        </div>
-      </div>
+      <PageHeader
+        icon="dashboard"
+        eyebrow="Resumen familiar"
+        title="Dashboard"
+        subtitle={<span className="capitalize">{monthLabel(selectedMonth)}</span>}
+        actions={
+          <>
+            <button
+              onClick={() => setSelectedMonth(shiftMonth(selectedMonth, -1))}
+              className="btn-secondary !px-2.5 !py-2"
+              aria-label="Mes anterior"
+            >
+              <Icon name="chevronLeft" className="w-4 h-4" />
+            </button>
+            <input
+              type="month"
+              className="input !w-auto"
+              value={selectedMonth}
+              onChange={(e) => setSelectedMonth(e.target.value)}
+            />
+            <button
+              onClick={() => setSelectedMonth(shiftMonth(selectedMonth, 1))}
+              disabled={isCurrentMonthSelected}
+              className="btn-secondary !px-2.5 !py-2"
+              aria-label="Mes siguiente"
+            >
+              <Icon name="chevronRight" className="w-4 h-4" />
+            </button>
+          </>
+        }
+      />
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
         <SummaryCard
           label="Ingresos del mes"
           value={totalIncome}
-          emoji="💵"
+          icon="wallet"
+          accent="emerald"
           delta={incomeDelta}
           goodDirection="up"
-          className="bg-emerald-50 border-emerald-200 text-emerald-800"
         />
         <SummaryCard
           label="Gastos del mes"
           value={totalSpent}
-          emoji="🧾"
+          icon="receipt"
+          accent="rose"
           delta={spentDelta}
           goodDirection="down"
-          className="bg-rose-50 border-rose-200 text-rose-800"
         />
         <SummaryCard
           label="Balance del mes"
           value={balance}
-          emoji={balance >= 0 ? "🎉" : "⚠️"}
+          icon="scale"
+          accent={balance >= 0 ? "indigo" : "amber"}
           delta={balanceDelta}
           goodDirection="up"
-          className={
-            balance >= 0
-              ? "bg-brand-50 border-brand-100 text-brand-800"
-              : "bg-amber-50 border-amber-200 text-amber-800"
-          }
         />
         <SummaryCard
           label="Balance acumulado"
           value={accumulatedBalance}
-          emoji={accumulatedBalance >= 0 ? "💰" : "🚨"}
+          icon="star"
+          accent={accumulatedBalance >= 0 ? "violet" : "rose"}
+          hint="Arrastra el sobrante o déficit de todos los meses anteriores"
           delta={accumulatedDelta}
           goodDirection="up"
-          className={
-            accumulatedBalance >= 0
-              ? "bg-indigo-50 border-indigo-200 text-indigo-800"
-              : "bg-red-50 border-red-200 text-red-800"
-          }
         />
       </div>
-      <p className="text-xs text-slate-400 -mt-3">
-        💡 El "Balance acumulado" arrastra el sobrante (o déficit) de todos los meses anteriores —
-        es tu colchón real disponible hasta hoy. El "Balance del mes" solo mira {monthLabel(selectedMonth)}.
-      </p>
 
-      <SortableSections
+      <SectionMosaic
         order={dashboardOrder}
         onSave={saveDashboardOrder}
         storageKey={`ff-dashboard-abiertas-${session?.user.id ?? "anon"}`}
         sections={[
           {
             key: "recomendaciones",
-            title: "💡 Recomendaciones",
-            summary: recommendations.length ? `${recommendations.length} sugerencia${recommendations.length === 1 ? "" : "s"}` : "Sin sugerencias por ahora",
+            ...sectionMeta.recomendaciones,
+            title: "Recomendaciones",
             node: <RecommendationsPanel recs={recommendations} hideTitle />,
           },
           {
             key: "alertas",
-            title: "🔔 Alertas",
-            summary: alerts.length
-              ? `${alerts.some((a) => a.level === "red") ? "🔴 " : ""}${alerts.length} alerta${alerts.length === 1 ? "" : "s"}`
-              : "✅ Todo tranquilo",
+            ...sectionMeta.alertas,
+            title: "Alertas",
             node: (
             <div>
               <AlertBanner alerts={alerts} />
@@ -352,8 +449,8 @@ function DashboardContent() {
           },
           {
             key: "flujo",
-            title: "📆 Próximos pagos y cobros",
-            summary: "Calendario de los próximos días",
+            ...sectionMeta.flujo,
+            title: "Próximos pagos",
             node: (
               <CashFlowTimeline
                 startBalance={balanceToday}
@@ -370,8 +467,8 @@ function DashboardContent() {
           },
           {
             key: "graficos",
-            title: "📈 Gastado vs. límite y distribución",
-            summary: `${formatCurrency(totalSpent)} gastado`,
+            ...sectionMeta.graficos,
+            title: "Gasto del mes",
             node: (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <div className="card">
@@ -449,13 +546,14 @@ function DashboardContent() {
           },
           {
             key: "tendencia",
-            title: "📉 Tendencia de gasto mes a mes",
+            ...sectionMeta.tendencia,
+            title: "Tendencia",
             node: <TrendChart expenses={expenses} categories={categories} endMonth={selectedMonth} hideTitle />,
           },
           {
             key: "distribucion",
-            title: "👥 Distribución entre ustedes",
-            summary: "Por persona y por tarjeta",
+            ...sectionMeta.distribucion,
+            title: "Entre ustedes",
             node: (
             <div>
               <p className="text-xs text-slate-400 mb-3">
@@ -484,10 +582,8 @@ function DashboardContent() {
           },
           {
             key: "limites",
-            title: "🎯 Límites por categoría",
-            summary: overLimitCount
-              ? `🔴 ${overLimitCount} categoría${overLimitCount === 1 ? "" : "s"} sobre el límite`
-              : "Todas dentro del límite",
+            ...sectionMeta.limites,
+            title: "Límites",
             node: (
             <div className="card">
               <p className="text-xs text-slate-400 mb-3">Haz clic en una categoría para ver el detalle de sus gastos del mes.</p>
@@ -497,8 +593,8 @@ function DashboardContent() {
           },
           {
             key: "metas",
-            title: "🏆 Metas de ahorro",
-            summary: goals.length ? `${goals.length} meta${goals.length === 1 ? "" : "s"}` : "Sin metas aún",
+            ...sectionMeta.metas,
+            title: "Metas de ahorro",
             node: (
             <GoalsPanel
               goals={goals}
@@ -519,30 +615,40 @@ function DashboardContent() {
 function SummaryCard({
   label,
   value,
-  emoji,
-  className,
+  icon,
+  accent,
   delta,
   goodDirection,
+  hint,
 }: {
   label: string;
   value: number;
-  emoji: string;
-  className: string;
+  icon: IconName;
+  accent: Accent;
   delta: number | null;
   goodDirection: "up" | "down";
+  hint?: string;
 }) {
   const isGood = delta === null ? null : goodDirection === "up" ? delta >= 0 : delta <= 0;
   return (
-    <div className={`card border ${className}`}>
-      <p className="text-sm opacity-80 flex items-center gap-1.5">
-        <span className="text-lg">{emoji}</span> {label}
+    <div className="bg-white rounded-3xl border border-slate-200/70 shadow-sm p-4 md:p-5" title={hint}>
+      <div className="flex items-center justify-between gap-2">
+        <IconTile icon={icon} accent={accent} size="sm" />
+        {delta !== null && (
+          <span
+            className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${
+              isGood ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-600"
+            }`}
+          >
+            {delta >= 0 ? "▲" : "▼"} {Math.abs(delta).toFixed(0)}%
+          </span>
+        )}
+      </div>
+      <p className="text-xs font-medium text-slate-500 mt-3">{label}</p>
+      <p className={`text-xl md:text-2xl font-heading font-extrabold tracking-tight mt-0.5 ${value < 0 ? "text-rose-600" : "text-slate-900"}`}>
+        {formatCurrency(value)}
       </p>
-      <p className="text-2xl font-heading font-bold mt-1">{formatCurrency(value)}</p>
-      {delta !== null && (
-        <p className={`text-xs mt-1 font-medium ${isGood ? "text-emerald-700" : "text-red-600"}`}>
-          {delta >= 0 ? "▲" : "▼"} {Math.abs(delta).toFixed(0)}% vs mes anterior
-        </p>
-      )}
+      {hint && <p className="text-[11px] text-slate-400 mt-1 leading-snug hidden md:block">{hint}</p>}
     </div>
   );
 }

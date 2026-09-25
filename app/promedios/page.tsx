@@ -7,6 +7,7 @@ import { useTable } from "@/lib/hooks";
 import { Category, Expense } from "@/lib/types";
 import { serviceAverages, ServiceAverage, normalizeText } from "@/lib/insights";
 import { formatCurrency, monthLabel, toMonthValue } from "@/lib/utils";
+import { Icon, PageHeader, Pill, Section } from "@/components/ui";
 
 export default function PromediosPage() {
   return (
@@ -75,15 +76,23 @@ function PromediosContent() {
   const allOpen = groups.length > 0 && groups.every((g) => openCats.has(g.id));
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">📈 Promedios por pago</h1>
-        <p className="text-sm text-slate-500 mt-1">
-          Cuánto pagan en promedio por cada cosa específica (luz, agua, internet, gasolina…), no solo por categoría — para
-          saber si una planilla llegó más alta de lo normal.
-        </p>
-      </div>
+    <div className="space-y-5">
+      <PageHeader
+        icon="chart"
+        eyebrow="Análisis"
+        title="Promedios por pago"
+        subtitle="Cuánto pagan en promedio por cada cosa (luz, agua, gasolina…), para saber si algo llegó más alto de lo normal"
+      />
 
+      <Section
+        id="promedios-filtros"
+        icon="filter"
+        accent="slate"
+        title="Filtros"
+        subtitle="Período, categoría, búsqueda y orden"
+        badge={<Pill tone="slate">{filtered.length} pagos</Pill>}
+        defaultOpen={false}
+      >
       <div className="card flex flex-wrap gap-3 items-end">
         <div>
           <label className="label">Hasta el mes</label>
@@ -127,9 +136,10 @@ function PromediosContent() {
           Solo pagos que se repiten (2+ meses)
         </label>
       </div>
+      </Section>
 
       {(mixedCategory.length > 0 || inOtros.length > 0) && (
-        <div className="card bg-amber-50 border-amber-200 text-amber-900 text-sm space-y-1">
+        <div className="rounded-3xl bg-amber-50 border border-amber-200 text-amber-900 text-sm space-y-1 p-5">
           <p className="font-semibold">🧹 Para que la información sea más exacta</p>
           {mixedCategory.length > 0 && (
             <p>
@@ -162,25 +172,44 @@ function PromediosContent() {
           <div className="flex justify-end">
             <button
               onClick={() => setOpenCats(allOpen ? new Set() : new Set(groups.map((g) => g.id)))}
-              className="text-xs text-brand-600 hover:underline"
+              className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 shadow-sm"
             >
-              {allOpen ? "Contraer todo" : "Expandir todo"}
+              <Icon name={allOpen ? "shrink" : "expand"} className="w-3.5 h-3.5" />
+              {allOpen ? "Cerrar todo" : "Abrir todo"}
             </button>
           </div>
           {groups.map((g) => {
             const isOpen = openCats.has(g.id);
             return (
-              <div key={g.id} className="border border-slate-200 rounded-xl overflow-hidden bg-white">
+              <div
+                key={g.id}
+                className={`rounded-3xl overflow-hidden bg-white border border-slate-200/70 transition-shadow ${
+                  isOpen ? "shadow-md" : "shadow-sm hover:shadow-md"
+                }`}
+              >
                 <button
                   onClick={() => toggle(g.id)}
-                  className="w-full flex items-center justify-between px-4 py-3 hover:bg-slate-50 text-left"
+                  aria-expanded={isOpen}
+                  className="w-full flex items-center gap-3 px-4 md:px-5 py-4 text-left"
                 >
-                  <span className="font-semibold text-sm">
-                    {g.category ? `${g.category.icon} ${g.category.name}` : "Sin categoría"}{" "}
-                    <span className="text-slate-400 font-normal">({g.list.length})</span>
+                  <span className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center text-lg flex-shrink-0">
+                    {g.category?.icon ?? "📦"}
                   </span>
-                  <span className="text-sm text-slate-600">
-                    ≈ {formatCurrency(g.monthlyAverage)}/mes <span className="text-slate-400 ml-2">{isOpen ? "▾" : "▸"}</span>
+                  <span className="flex-1 min-w-0">
+                    <span className="block font-heading font-semibold text-[15px] text-slate-900 truncate">
+                      {g.category ? g.category.name : "Sin categoría"}
+                    </span>
+                    <span className="block text-xs text-slate-500">
+                      {g.list.length} pago{g.list.length === 1 ? "" : "s"} distinto{g.list.length === 1 ? "" : "s"}
+                    </span>
+                  </span>
+                  <Pill tone="indigo">≈ {formatCurrency(g.monthlyAverage)}/mes</Pill>
+                  <span
+                    className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 transition-all ${
+                      isOpen ? "bg-indigo-50 text-indigo-600 rotate-180" : "bg-slate-100 text-slate-500"
+                    }`}
+                  >
+                    <Icon name="chevronDown" className="w-4 h-4" />
                   </span>
                 </button>
                 {isOpen && (

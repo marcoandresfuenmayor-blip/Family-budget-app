@@ -7,6 +7,7 @@ import { useTable } from "@/lib/hooks";
 import { supabase } from "@/lib/supabaseClient";
 import { IncomeEntry, IncomeSource } from "@/lib/types";
 import { formatCurrency } from "@/lib/utils";
+import { PageHeader, Pill, Section, Tip } from "@/components/ui";
 import { toDateKey } from "@/lib/insights";
 
 export default function IngresosPage() {
@@ -66,16 +67,41 @@ function IngresosContent() {
   }
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-bold">💵 Ingresos</h1>
+    <div className="space-y-5">
+      <PageHeader
+        icon="wallet"
+        eyebrow="Movimientos"
+        title="Ingresos"
+        subtitle="Sueldos, ingresos extra y lo que esperan recibir"
+        actions={
+          <input
+            type="month"
+            className="input !w-auto"
+            value={monthFilter}
+            onChange={(e) => setMonthFilter(e.target.value)}
+          />
+        }
+      />
 
-      <div className="card bg-sky-50 border-sky-200 text-sky-900 text-sm">
-        💡 <strong>¿Cómo funciona esto?</strong> Los "ingresos recurrentes" de abajo son solo una
+      <Section
+        id="ingresos-recurrentes"
+        icon="repeat"
+        accent="emerald"
+        title="Ingresos recurrentes"
+        subtitle="Sueldos y pagos que llegan cada mes"
+        badge={
+          <Pill tone="green">
+            {formatCurrency(sources.filter((s) => s.active).reduce((t, s) => t + Number(s.amount), 0))}/mes
+          </Pill>
+        }
+      >
+      <Tip>
+        <strong>¿Cómo funciona esto?</strong> Los "ingresos recurrentes" de abajo son solo una
         plantilla para que la app te avise cuándo esperar cada sueldo — por sí solos no cuentan en
         el dashboard. Si activaste el auto-registro (ver README), se registran solos el día que
         corresponda; si no, usa <strong>"✅ Marcar recibido"</strong> o regístralo manualmente
         abajo.
-      </div>
+      </Tip>
 
       <IncomeSourceManager
         sources={sources}
@@ -83,9 +109,17 @@ function IngresosContent() {
         onChange={refreshSources}
         onMarkReceived={markReceived}
       />
+      </Section>
 
+      <Section
+        id="ingresos-registrar"
+        icon="plus"
+        accent="sky"
+        title={editingEntry ? "Editar ingreso" : "Registrar ingreso"}
+        subtitle="Un ingreso puntual o extra"
+        openSignal={editingEntry?.id}
+      >
       <div className="card">
-        <h2 className="font-semibold mb-3">✍️ {editingEntry ? "Editar ingreso" : "Registrar ingreso"}</h2>
         <IncomeEntryForm
           sources={sources}
           householdId={householdId}
@@ -98,20 +132,17 @@ function IngresosContent() {
           }}
         />
       </div>
+      </Section>
 
+      <Section
+        id="ingresos-historial"
+        icon="list"
+        accent="indigo"
+        title="Historial de ingresos"
+        subtitle={`${filtered.length} registro${filtered.length === 1 ? "" : "s"} en ${monthFilter}`}
+        badge={<Pill tone="green">{formatCurrency(total)}</Pill>}
+      >
       <div className="card">
-        <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
-          <h2 className="font-semibold">📜 Historial de ingresos</h2>
-          <div className="flex items-center gap-3">
-            <input
-              type="month"
-              className="input !w-auto"
-              value={monthFilter}
-              onChange={(e) => setMonthFilter(e.target.value)}
-            />
-            <span className="font-semibold text-emerald-700">{formatCurrency(total)}</span>
-          </div>
-        </div>
 
         {loading ? (
           <p className="text-slate-500 text-sm">Cargando...</p>
@@ -148,7 +179,6 @@ function IngresosContent() {
                     <button
                       onClick={() => {
                         setEditingEntry(e);
-                        window.scrollTo({ top: 0, behavior: "smooth" });
                       }}
                       className="text-brand-600 hover:underline text-xs mr-3"
                     >
@@ -167,6 +197,7 @@ function IngresosContent() {
           </table>
         )}
       </div>
+      </Section>
     </div>
   );
 }
@@ -240,7 +271,6 @@ function IncomeSourceManager({
 
   return (
     <div className="card">
-      <h2 className="font-semibold mb-3">🔁 Ingresos recurrentes (sueldos, etc.)</h2>
 
       <form onSubmit={saveSource} className="grid grid-cols-1 md:grid-cols-5 gap-3 items-end mb-4">
         {editingSource && (

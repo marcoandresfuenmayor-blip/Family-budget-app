@@ -9,6 +9,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { Category, CheckinAnswer, CheckinStatus, Expense, HouseholdMember } from "@/lib/types";
 import { previousQuincenaRange, quincenaRange } from "@/lib/insights";
 import { formatCurrency } from "@/lib/utils";
+import { PageHeader, Pill, Section } from "@/components/ui";
 
 const ALIGNMENT = [
   { value: 1, emoji: "😖", label: "Para nada" },
@@ -67,15 +68,30 @@ function ParejaContent() {
   const previous = expenses.filter((e) => inPeriod(e, prevPeriod) && !e.is_card_payment);
 
   return (
-    <div className="space-y-6">
-      <div className="rounded-2xl p-5 text-white bg-gradient-to-br from-pink-500 to-indigo-500">
-        <h1 className="text-2xl font-bold">💞 Chequeo quincenal de pareja</h1>
-        <p className="text-sm opacity-90 mt-1">
-          Quincena del {period.label}. Dos preguntas, diez segundos: no mide cuánto gastaron, sino qué tan alineados se
-          sienten. Lo del otro solo se ve cuando ambos respondieron.
-        </p>
-      </div>
+    <div className="space-y-5">
+      <PageHeader
+        icon="heart"
+        eyebrow={`Quincena del ${period.label}`}
+        title="Pareja"
+        subtitle="Qué tan alineados se sienten con el dinero, no solo cuánto gastaron"
+      />
 
+      <Section
+        id="pareja-chequeo"
+        icon="heart"
+        accent="pink"
+        title="Chequeo quincenal"
+        subtitle="Dos preguntas, diez segundos. Lo del otro se ve cuando ambos respondan."
+        badge={
+          !status ? undefined : status.revealed ? (
+            <Pill tone="green">Revelado</Pill>
+          ) : myAnswer ? (
+            <Pill tone="amber">Esperando a tu pareja</Pill>
+          ) : (
+            <Pill tone="indigo">Te toca responder</Pill>
+          )
+        }
+      >
       {!status ? (
         <p className="text-sm text-slate-500">Cargando...</p>
       ) : !myAnswer || editing ? (
@@ -105,15 +121,33 @@ function ParejaContent() {
       ) : (
         <Revealed rows={status.rows} nameOf={nameOf} onEdit={() => setEditing(true)} />
       )}
+      </Section>
 
-      <Narrative current={current} previous={previous} categories={categories} periodLabel={period.label} />
+      <Section
+        id="pareja-resumen"
+        icon="list"
+        accent="sky"
+        title="La quincena, en palabras"
+        subtitle="Un resumen corto para leer juntos"
+        badge={<Pill tone="slate">{formatCurrency(current.reduce((t, e) => t + Number(e.amount), 0))}</Pill>}
+      >
+        <Narrative current={current} previous={previous} categories={categories} periodLabel={period.label} />
+      </Section>
 
-      <FreeMoney
-        members={members}
-        expenses={expenses}
-        period={period}
-        onChange={refreshMembers}
-      />
+      <Section
+        id="pareja-libre"
+        icon="gift"
+        accent="amber"
+        title="Plata libre"
+        subtitle="Un monto por persona que se gasta sin dar explicaciones"
+      >
+        <FreeMoney
+          members={members}
+          expenses={expenses}
+          period={period}
+          onChange={refreshMembers}
+        />
+      </Section>
     </div>
   );
 }
@@ -332,7 +366,6 @@ function Narrative({
 
   return (
     <div className="card">
-      <h2 className="font-semibold mb-2">📋 La quincena, en palabras</h2>
       {current.length === 0 ? (
         <p className="text-sm text-slate-500">Todavía no hay gastos registrados en esta quincena.</p>
       ) : (
@@ -383,7 +416,6 @@ function FreeMoney({
 
   return (
     <div className="card">
-      <h2 className="font-semibold mb-1">🎈 Plata libre, sin tener que justificarla</h2>
       <p className="text-xs text-slate-500 mb-4">
         Un monto por persona, por quincena, que cada uno gasta en lo que quiera sin dar explicaciones. Para que cuente
         aquí, marca el gasto como &quot;🎈 De mi plata libre&quot; al registrarlo (o escribe &quot;libre&quot; si lo

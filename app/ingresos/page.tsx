@@ -40,6 +40,12 @@ function IngresosContent() {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
   });
+
+  // Si viene desde el Dashboard (?mes=2026-10), abre ese mes.
+  useEffect(() => {
+    const mes = new URLSearchParams(window.location.search).get("mes");
+    if (mes && /^\d{4}-\d{2}$/.test(mes)) setMonthFilter(mes);
+  }, []);
   const filtered = entries.filter((e) => e.entry_date.startsWith(monthFilter));
   const total = filtered.reduce((s, e) => s + Number(e.amount), 0);
 

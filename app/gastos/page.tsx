@@ -49,6 +49,12 @@ function GastosContent() {
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
   });
 
+  // Si viene desde el Dashboard (?mes=2026-10), abre ese mes.
+  useEffect(() => {
+    const mes = new URLSearchParams(window.location.search).get("mes");
+    if (mes && /^\d{4}-\d{2}$/.test(mes)) setMonthFilter(mes);
+  }, []);
+
   type SortKey = "expense_date" | "description" | "amount" | "category" | "card" | "registered";
   const [sortBy, setSortBy] = useState<SortKey>("expense_date");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");

@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import {
   Bar,
   BarChart,
@@ -393,6 +394,7 @@ function DashboardContent() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
         <SummaryCard
           label="Ingresos del mes"
+          href={`/ingresos?mes=${selectedMonth}`}
           value={totalIncome}
           icon="wallet"
           accent="emerald"
@@ -401,6 +403,7 @@ function DashboardContent() {
         />
         <SummaryCard
           label="Gastos del mes"
+          href={`/gastos?mes=${selectedMonth}`}
           value={totalSpent}
           icon="receipt"
           accent="rose"
@@ -620,6 +623,7 @@ function SummaryCard({
   delta,
   goodDirection,
   hint,
+  href,
 }: {
   label: string;
   value: number;
@@ -628,27 +632,50 @@ function SummaryCard({
   delta: number | null;
   goodDirection: "up" | "down";
   hint?: string;
+  href?: string;
 }) {
   const isGood = delta === null ? null : goodDirection === "up" ? delta >= 0 : delta <= 0;
+  const content = (
+    <>
+        <div className="flex items-center justify-between gap-2">
+          <IconTile icon={icon} accent={accent} size="sm" />
+          {delta !== null && (
+            <span
+              className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${
+                isGood ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-600"
+              }`}
+            >
+              {delta >= 0 ? "▲" : "▼"} {Math.abs(delta).toFixed(0)}%
+            </span>
+          )}
+        </div>
+        <p className="text-xs font-medium text-slate-500 mt-3">{label}</p>
+        <p className={`text-xl md:text-2xl font-heading font-extrabold tracking-tight mt-0.5 ${value < 0 ? "text-rose-600" : "text-slate-900"}`}>
+          {formatCurrency(value)}
+        </p>
+        {hint && <p className="text-[11px] text-slate-400 mt-1 leading-snug hidden md:block">{hint}</p>}
+      {href && (
+        <p className="text-[11px] font-semibold text-indigo-600 mt-2 flex items-center gap-1">
+          Ver detalle <Icon name="chevronRight" className="w-3 h-3" />
+        </p>
+      )}
+    </>
+  );
+  const base = "block bg-white rounded-3xl border border-slate-200/70 shadow-sm p-4 md:p-5";
+  if (href) {
+    return (
+      <Link
+        href={href}
+        title={hint}
+        className={`${base} transition-all hover:-translate-y-0.5 hover:shadow-lg hover:border-indigo-200 focus:outline-none focus:ring-2 focus:ring-indigo-400`}
+      >
+        {content}
+      </Link>
+    );
+  }
   return (
-    <div className="bg-white rounded-3xl border border-slate-200/70 shadow-sm p-4 md:p-5" title={hint}>
-      <div className="flex items-center justify-between gap-2">
-        <IconTile icon={icon} accent={accent} size="sm" />
-        {delta !== null && (
-          <span
-            className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${
-              isGood ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-600"
-            }`}
-          >
-            {delta >= 0 ? "▲" : "▼"} {Math.abs(delta).toFixed(0)}%
-          </span>
-        )}
-      </div>
-      <p className="text-xs font-medium text-slate-500 mt-3">{label}</p>
-      <p className={`text-xl md:text-2xl font-heading font-extrabold tracking-tight mt-0.5 ${value < 0 ? "text-rose-600" : "text-slate-900"}`}>
-        {formatCurrency(value)}
-      </p>
-      {hint && <p className="text-[11px] text-slate-400 mt-1 leading-snug hidden md:block">{hint}</p>}
+    <div className={base} title={hint}>
+      {content}
     </div>
   );
 }

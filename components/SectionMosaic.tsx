@@ -1,7 +1,7 @@
 "use client";
 
 import { ReactNode, useEffect, useRef, useState } from "react";
-import { Accent, ACCENTS, Icon, IconName, IconTile } from "@/components/ui";
+import { Accent, ACCENTS, Help, Icon, IconName, IconTile } from "@/components/ui";
 
 export type MosaicSection = {
   key: string;
@@ -12,6 +12,7 @@ export type MosaicSection = {
   caption: string;
   progress?: number | null; // 0-100, dibuja una barra
   tone?: "bad" | "good" | "neutral";
+  help?: ReactNode;
   node: ReactNode; // el detalle que se abre al tocar
 };
 
@@ -177,19 +178,22 @@ export default function SectionMosaic({
               onDragOver={(e) => editing && e.preventDefault()}
               onDrop={() => editing && dropOn(key)}
               onDragEnd={() => setDragKey(null)}
-              className={`relative ${dragKey === key ? "opacity-40" : ""}`}
+              className={`group/help relative ${dragKey === key ? "opacity-40" : ""}`}
             >
               <button
                 onClick={() => !editing && toggle(key)}
                 aria-expanded={isOpen}
-                className={`group relative w-full h-full text-left bg-white rounded-3xl p-4 border overflow-hidden transition-all ${
+                className={`group relative w-full h-full text-left bg-white rounded-3xl p-4 border transition-all ${
                   editing ? "cursor-grab border-dashed border-slate-300" : "border-slate-200/70 hover:-translate-y-0.5 hover:shadow-lg"
                 } ${isOpen ? `ring-2 ${a.ring} shadow-lg` : "shadow-sm"}`}
               >
-                <span className={`absolute -right-8 -top-8 w-28 h-28 rounded-full ${a.soft}`} aria-hidden />
+                <span className="absolute inset-0 rounded-3xl overflow-hidden pointer-events-none" aria-hidden>
+                  <span className={`absolute -right-8 -top-8 w-28 h-28 rounded-full ${a.soft}`} />
+                </span>
                 <span className="relative flex items-center gap-2.5">
                   <IconTile icon={s.icon} accent={s.accent} size="sm" />
                   <span className="text-[13px] font-semibold text-slate-700 leading-tight">{s.title}</span>
+                  {s.help && !editing && <Help text={s.help} align={idx % 2 === 1 ? "right" : "left"} />}
                 </span>
                 <span className={`relative block text-2xl md:text-[28px] font-extrabold tracking-tight mt-4 ${valueColor}`}>
                   {s.value}

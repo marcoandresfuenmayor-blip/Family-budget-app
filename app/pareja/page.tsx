@@ -78,6 +78,7 @@ function ParejaContent() {
 
       <Section
         id="pareja-chequeo"
+        help="Cada uno responde dos preguntas en privado sobre cómo vivió el gasto de la quincena. Las respuestas del otro solo se ven cuando ambos contestaron."
         icon="heart"
         accent="pink"
         title="Chequeo quincenal"
@@ -125,6 +126,7 @@ function ParejaContent() {
 
       <Section
         id="pareja-resumen"
+        help="Un resumen corto, en palabras, de cómo va la quincena: total, lo que más pesa y lo que más subió."
         icon="list"
         accent="sky"
         title="La quincena, en palabras"
@@ -136,6 +138,7 @@ function ParejaContent() {
 
       <Section
         id="pareja-libre"
+        help="Un monto por persona, por quincena, para gastar en lo que quiera sin dar explicaciones. Se descuenta de los gastos marcados como &quot;plata libre&quot;."
         icon="gift"
         accent="amber"
         title="Plata libre"

@@ -89,6 +89,7 @@ function WhatsappContent() {
 
       <Section
         id="wa-vincular"
+        help="Genera un código y mándalo por WhatsApp al número de la app, para comprobar que el celular es tuyo."
         icon="link"
         accent="emerald"
         title="1. Vincula tu número"
@@ -140,6 +141,7 @@ function WhatsappContent() {
 
       <Section
         id="wa-numeros"
+        help="Los celulares que pueden registrar gastos escribiéndole a la app."
         icon="phone"
         accent="teal"
         title="2. Números vinculados"
@@ -173,6 +175,7 @@ function WhatsappContent() {
 
       <Section
         id="wa-comandos"
+        help="Ejemplos de mensajes que la app entiende por WhatsApp."
         icon="chat"
         accent="sky"
         title="3. Qué le puedes escribir"

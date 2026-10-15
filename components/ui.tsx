@@ -146,6 +146,7 @@ export function Section({
   badge,
   defaultOpen = true,
   openSignal,
+  help,
   children,
 }: {
   id: string;
@@ -156,6 +157,7 @@ export function Section({
   badge?: ReactNode;
   defaultOpen?: boolean;
   openSignal?: unknown; // cuando cambia (y no es vacío), la sección se abre sola
+  help?: ReactNode;
   children: ReactNode;
 }) {
   const storageKey = `ff-seccion-${id}`;
@@ -195,10 +197,13 @@ export function Section({
         open ? "shadow-md" : "hover:shadow-md"
       }`}
     >
-      <button onClick={toggle} aria-expanded={open} className="w-full flex items-center gap-3 md:gap-4 px-4 md:px-5 py-4 text-left">
+      <button onClick={toggle} aria-expanded={open} className="group/help w-full flex items-center gap-3 md:gap-4 px-4 md:px-5 py-4 text-left">
         <IconTile icon={icon} accent={accent} />
         <span className="flex-1 min-w-0">
-          <span className="block font-heading font-semibold text-[15px] text-slate-900 truncate">{title}</span>
+          <span className="flex items-center gap-1.5 font-heading font-semibold text-[15px] text-slate-900">
+            <span className="truncate">{title}</span>
+            {help && <Help text={help} />}
+          </span>
           {subtitle && <span className="block text-xs text-slate-500 truncate">{subtitle}</span>}
         </span>
         {badge && <span className="hidden sm:inline-flex">{badge}</span>}
@@ -232,5 +237,61 @@ export function Tip({ children }: { children: ReactNode }) {
       <Icon name="info" className="w-4 h-4 mt-0.5 flex-shrink-0 text-indigo-500" />
       <div>{children}</div>
     </div>
+  );
+}
+
+// -----------------------------------------------------------------
+// AYUDA AL PASAR EL CURSOR
+// El elemento padre debe tener la clase "group/help": al pasar el cursor
+// por cualquier parte de él aparece la explicación. En el celular (sin
+// cursor) se toca el ícono ⓘ.
+// -----------------------------------------------------------------
+export function Help({
+  text,
+  align = "left",
+  place = "top",
+}: {
+  text: ReactNode;
+  align?: "left" | "right" | "center";
+  place?: "top" | "bottom";
+}) {
+  const [open, setOpen] = useState(false);
+  const pos =
+    (place === "top" ? "bottom-full mb-2 " : "top-full mt-2 ") +
+    (align === "right" ? "right-0" : align === "center" ? "left-1/2 -translate-x-1/2" : "left-0");
+  return (
+    <span className="relative inline-flex align-middle">
+      <span
+        role="button"
+        tabIndex={0}
+        aria-label="¿Para qué sirve?"
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          setOpen((v) => !v);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            e.stopPropagation();
+            setOpen((v) => !v);
+          }
+        }}
+        onBlur={() => setOpen(false)}
+        className="text-slate-300 hover:text-indigo-500 group-hover/help:text-indigo-400 cursor-help transition-colors"
+      >
+        <Icon name="info" className="w-3.5 h-3.5" />
+      </span>
+      <span
+        role="tooltip"
+        className={`absolute ${pos} z-40 w-64 max-w-[78vw] rounded-xl bg-slate-900 text-white text-xs font-normal normal-case tracking-normal leading-relaxed text-left px-3 py-2.5 shadow-2xl pointer-events-none transition-all duration-150 ${
+          open
+            ? "opacity-100 translate-y-0"
+            : "opacity-0 translate-y-1 group-hover/help:opacity-100 group-hover/help:translate-y-0 group-hover/help:delay-300"
+        }`}
+      >
+        {text}
+      </span>
+    </span>
   );
 }

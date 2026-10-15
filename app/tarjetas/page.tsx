@@ -6,7 +6,8 @@ import { useHousehold } from "@/lib/HouseholdContext";
 import { useTable } from "@/lib/hooks";
 import { supabase } from "@/lib/supabaseClient";
 import { Card, Category, Expense } from "@/lib/types";
-import { cardCycleSpend, cardClosedCycleDue, formatCurrency, nextOccurrence } from "@/lib/utils";
+import { cardBilling, formatCurrency } from "@/lib/utils";
+import ExpenseMiniList from "@/components/ExpenseMiniList";
 import { PageHeader, Pill, Section } from "@/components/ui";
 
 export default function TarjetasPage() {
@@ -26,6 +27,7 @@ function TarjetasContent() {
   const { data: categories } = useTable<Category>("categories", householdId, { column: "name" });
 
   const [editingCard, setEditingCard] = useState<Card | null>(null);
+  const [openList, setOpenList] = useState<string | null>(null); // "cardId:due" | "cardId:next"
   const [name, setName] = useState("");
   const [closingDay, setClosingDay] = useState("15");
   const [paymentDay, setPaymentDay] = useState("25");
@@ -100,13 +102,14 @@ function TarjetasContent() {
 
       <Section
         id="tarjetas-lista"
+        help="Para cada tarjeta: cuánto toca pagar en el próximo pago y lo que ya se está acumulando para el pago siguiente. Toca cualquier monto para ver sus consumos."
         icon="card"
         accent="violet"
         title="Mis tarjetas"
         subtitle="Lo que toca pagar y lo que se va acumulando"
         badge={
           <Pill tone="amber">
-            {formatCurrency(cards.reduce((t, c) => t + cardClosedCycleDue(expenses, c.id, c.closing_day), 0))} por pagar
+            {formatCurrency(cards.reduce((t, c) => t + cardBilling(expenses, c).dueTotal, 0))} próximo pago
           </Pill>
         }
       >
@@ -123,6 +126,7 @@ function TarjetasContent() {
 
       <Section
         id="tarjetas-form"
+        help="Agrega una tarjeta o cambia su día de corte, día de pago y límite de crédito."
         icon="plus"
         accent="indigo"
         title={editingCard ? `Editar tarjeta: ${editingCard.name}` : "Agregar tarjeta"}
@@ -202,13 +206,13 @@ function TarjetasContent() {
 
   function renderCard(card: Card) {
     {
-            const closing = nextOccurrence(card.closing_day);
-            const payment = nextOccurrence(card.payment_day);
-            const cycleSpend = cardCycleSpend(expenses, card.id, card.closing_day);
-            const closedDue = cardClosedCycleDue(expenses, card.id, card.closing_day);
+            const b = cardBilling(expenses, card);
+            const fmt = (d: Date) => d.toLocaleDateString("es-ES", { day: "numeric", month: "short" });
             const utilizationPct = card.credit_limit
-              ? Math.min(((cycleSpend + closedDue) / Number(card.credit_limit)) * 100, 999)
+              ? Math.min(((b.dueTotal + b.nextTotal) / Number(card.credit_limit)) * 100, 999)
               : null;
+            const dueKey = `${card.id}:due`;
+            const nextKey = `${card.id}:next`;
             const pillColor =
               utilizationPct === null
                 ? "bg-slate-100 text-slate-600"
@@ -253,37 +257,63 @@ function TarjetasContent() {
                 </div>
 
                 <div className="bg-amber-50 border border-amber-100 rounded-xl p-3 mb-2">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-amber-800">
-                      💰 Por pagar el <strong>{payment.toLocaleDateString("es-ES")}</strong>
+                  <button
+                    onClick={() => setOpenList(openList === dueKey ? null : dueKey)}
+                    aria-expanded={openList === dueKey}
+                    className="w-full text-left"
+                  >
+                    <span className="flex items-center justify-between text-sm gap-2">
+                      <span className="text-amber-800">
+                        💰 Próximo pago: <strong>{fmt(b.paymentDate)}</strong>
+                      </span>
+                      <span className="flex items-center gap-1.5 font-bold text-amber-900">
+                        {formatCurrency(b.dueTotal)}
+                        <span className={`text-amber-500 text-xs transition-transform ${openList === dueKey ? "rotate-180" : ""}`}>▼</span>
+                      </span>
                     </span>
-                    <span className="font-bold text-amber-900">{formatCurrency(closedDue)}</span>
-                  </div>
-                  {card.auto_post_payment ? (
-                    <p className="text-xs text-amber-700 mt-1">
-                      ⚡ Este pago se registrará solo como gasto ese día.
-                    </p>
-                  ) : (
-                    <p className="text-xs text-amber-700/70 mt-1">
-                      Auto-pago desactivado — actívalo abajo con "editar" si quieres que se
-                      registre solo.
-                    </p>
+                    <span className="block text-xs text-amber-700 mt-1">
+                      {b.closed
+                        ? `Corte cerrado el ${fmt(b.closingDate)}: este monto ya no cambia.`
+                        : `Todavía suma compras hasta el corte del ${fmt(b.closingDate)}.`}{" "}
+                      <span className="font-semibold underline">
+                        {openList === dueKey ? "Ocultar consumos" : `Ver ${b.dueExpenses.length} consumo${b.dueExpenses.length === 1 ? "" : "s"}`}
+                      </span>
+                    </span>
+                  </button>
+                  {openList === dueKey && (
+                    <ExpenseMiniList expenses={b.dueExpenses} categories={categories} emptyText="No hay consumos en este corte." />
                   )}
                 </div>
 
                 <div className="bg-slate-50 rounded-xl p-3 mb-3">
-                  <div className="flex items-center justify-between text-sm mb-1">
-                    <span className="text-slate-500">
-                      📈 Acumulado del corte que cierra el {closing.toLocaleDateString("es-ES")}
+                  <button
+                    onClick={() => setOpenList(openList === nextKey ? null : nextKey)}
+                    aria-expanded={openList === nextKey}
+                    className="w-full text-left"
+                  >
+                    <span className="flex items-center justify-between text-sm gap-2">
+                      <span className="text-slate-600">
+                        📈 Para el pago del <strong>{fmt(b.nextPaymentDate)}</strong>
+                      </span>
+                      <span className="flex items-center gap-1.5 font-semibold text-slate-800">
+                        {formatCurrency(b.nextTotal)}
+                        <span className={`text-slate-400 text-xs transition-transform ${openList === nextKey ? "rotate-180" : ""}`}>▼</span>
+                      </span>
                     </span>
-                    <span className="font-semibold text-slate-800">{formatCurrency(cycleSpend)}</span>
-                  </div>
-                  <p className="text-xs text-slate-400 mb-1">
-                    Los gastos hechos después del último corte pasan aquí automáticamente — se
-                    pagarán un mes después, no en el pago del {payment.toLocaleDateString("es-ES")}.
-                  </p>
+                    <span className="block text-xs text-slate-500 mt-1">
+                      Compras hechas después del corte del {fmt(b.closingDate)}: se pagan un mes después.{" "}
+                      {b.nextExpenses.length > 0 && (
+                        <span className="font-semibold underline">
+                          {openList === nextKey ? "Ocultar consumos" : `Ver ${b.nextExpenses.length} consumo${b.nextExpenses.length === 1 ? "" : "s"}`}
+                        </span>
+                      )}
+                    </span>
+                  </button>
+                  {openList === nextKey && (
+                    <ExpenseMiniList expenses={b.nextExpenses} categories={categories} emptyText="Todavía no hay compras para ese pago." />
+                  )}
                   {card.credit_limit && (
-                    <div className="w-full bg-slate-200 rounded-full h-2">
+                    <div className="w-full bg-slate-200 rounded-full h-2 mt-2">
                       <div
                         className={`h-2 rounded-full ${barColor}`}
                         style={{ width: `${Math.min(utilizationPct ?? 0, 100)}%` }}
@@ -294,8 +324,13 @@ function TarjetasContent() {
 
                 <div className="text-sm space-y-1 text-slate-600">
                   <p>
-                    📅 Próximo corte: <strong>{closing.toLocaleDateString("es-ES")}</strong> (día{" "}
+                    📅 {b.closed ? "Próximo corte" : "Corte"}: <strong>{fmt(b.closed ? b.nextClosingDate : b.closingDate)}</strong> (día{" "}
                     {card.closing_day})
+                  </p>
+                  <p className="text-xs text-slate-400">
+                    {card.auto_post_payment
+                      ? "⚡ El pago se registra solo como gasto el día de pago."
+                      : "Auto-pago desactivado (recomendado por ahora)."}
                   </p>
                   {card.credit_limit && (
                     <p>🧾 Límite de crédito: {formatCurrency(Number(card.credit_limit))}</p>

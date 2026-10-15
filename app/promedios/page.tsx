@@ -86,6 +86,7 @@ function PromediosContent() {
 
       <Section
         id="promedios-filtros"
+        help="Elige el período, la categoría o busca un pago específico, y cómo ordenar la lista."
         icon="filter"
         accent="slate"
         title="Filtros"

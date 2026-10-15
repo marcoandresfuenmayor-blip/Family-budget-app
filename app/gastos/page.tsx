@@ -221,6 +221,7 @@ function GastosContent() {
 
       <Section
         id="gastos-registrar"
+        help="Anota un gasto: qué fue, cuánto, en qué categoría y con qué tarjeta (o efectivo). Marca &quot;extra&quot; si no estaba planeado, o &quot;plata libre&quot; si sale de tu monto personal."
         icon="plus"
         accent="rose"
         title={editingExpense ? "Editar gasto" : "Registrar gasto"}
@@ -243,6 +244,7 @@ function GastosContent() {
 
       <Section
         id="gastos-lista"
+        help="Todos los gastos del mes elegido arriba. Toca un encabezado de la tabla para ordenar, y usa editar o eliminar en cada fila."
         icon="list"
         accent="indigo"
         title={<span className="capitalize">Gastos de {monthLabel(monthFilter)}</span>}
@@ -378,6 +380,7 @@ function GastosContent() {
 
       <Section
         id="gastos-fijos"
+        help="Plantillas de gastos que se repiten cada mes (arriendo, internet, Netflix…). Se registran solos el día que elijas, sin que tengas que anotarlos."
         icon="repeat"
         accent="violet"
         title="Gastos fijos recurrentes"
@@ -409,6 +412,7 @@ function GastosContent() {
 
       <Section
         id="gastos-cuotas"
+        help="Compras diferidas a meses: registras la cuota y el plazo, y en cada corte de la tarjeta se anota una cuota sola hasta terminar."
         icon="calendar"
         accent="amber"
         title="Compras diferidas a cuotas"

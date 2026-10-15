@@ -24,7 +24,7 @@ import MiniPieCard from "@/components/MiniPieCard";
 import CashFlowTimeline from "@/components/CashFlowTimeline";
 import TrendChart from "@/components/TrendChart";
 import SectionMosaic, { mergeOrder } from "@/components/SectionMosaic";
-import { Accent, IconName, IconTile, PageHeader, Icon } from "@/components/ui";
+import { Accent, Help, IconName, IconTile, PageHeader, Icon } from "@/components/ui";
 import { supabase } from "@/lib/supabaseClient";
 import { buildCashFlow, monthlySpendSeries, toDateKey } from "@/lib/insights";
 import { useHousehold } from "@/lib/HouseholdContext";
@@ -294,14 +294,16 @@ function DashboardContent() {
   const goalProgress = firstGoal ? computeGoalProgress(firstGoal, incomeEntries, expenses) : null;
   const redAlerts = alerts.some((a) => a.level === "red");
 
-  const sectionMeta: Record<string, { icon: IconName; accent: Accent; value: string; caption: string; progress?: number | null; tone?: "bad" | "good" | "neutral" }> = {
+  const sectionMeta: Record<string, { help: string; icon: IconName; accent: Accent; value: string; caption: string; progress?: number | null; tone?: "bad" | "good" | "neutral" }> = {
     recomendaciones: {
+      help: "Sugerencias automáticas para ahorrar, según cómo van sus gastos frente a sus límites e ingresos del mes.",
       icon: "bulb",
       accent: "indigo",
       value: String(recommendations.length),
       caption: recommendations.length === 1 ? "idea para ahorrar" : "ideas para ahorrar",
     },
     alertas: {
+      help: "Avisos de cortes y pagos de tarjeta cercanos, ingresos por llegar y categorías cerca o sobre su límite. Toca una alerta de categoría o tarjeta para ver sus gastos.",
       icon: "bell",
       accent: "rose",
       value: String(alerts.length),
@@ -309,6 +311,7 @@ function DashboardContent() {
       tone: redAlerts ? "bad" : alerts.length ? "neutral" : "good",
     },
     flujo: {
+      help: "Calendario de los próximos días: sueldos que llegan y pagos que salen (gastos fijos, cuotas, tarjetas), con el saldo que les quedaría día a día.",
       icon: "calendar",
       accent: "sky",
       value: money0(outNext7),
@@ -316,12 +319,14 @@ function DashboardContent() {
       tone: flowRisk ? "bad" : "neutral",
     },
     graficos: {
+      help: "Cuánto gastaron en cada categoría frente al límite que definieron, y cómo se reparte el gasto del mes.",
       icon: "pie",
       accent: "violet",
       value: money0(totalSpent),
       caption: totalIncome > 0 ? `gastado · ${((totalSpent / totalIncome) * 100).toFixed(0)}% de lo ingresado` : "gastado este mes",
     },
     tendencia: {
+      help: "Compara el gasto de este mes con su promedio de meses anteriores. Un número positivo significa que están gastando más de lo normal.",
       icon: "trend",
       accent: "pink",
       value: trendPct === null ? "—" : `${trendPct > 0 ? "+" : ""}${trendPct.toFixed(0)}%`,
@@ -329,12 +334,14 @@ function DashboardContent() {
       tone: trendPct === null ? "neutral" : trendPct > 0 ? "bad" : "good",
     },
     distribucion: {
+      help: "Quién registró los gastos, de quién vienen los ingresos y en qué se va lo que pagan con tarjeta.",
       icon: "users",
       accent: "teal",
       value: topPersonPct === null ? "—" : `${topPersonPct.toFixed(0)}%`,
       caption: topPerson ? `de los gastos registró ${topPerson.name}` : "sin gastos este mes",
     },
     limites: {
+      help: "Qué porcentaje del presupuesto mensual llevan usado, sumando las categorías que tienen límite. Toca para verlo categoría por categoría.",
       icon: "target",
       accent: "amber",
       value: budgetPct === null ? "—" : `${budgetPct.toFixed(0)}%`,
@@ -348,6 +355,7 @@ function DashboardContent() {
       tone: overLimitCount ? "bad" : "neutral",
     },
     metas: {
+      help: "Avance de su meta de ahorro, calculado con lo que les sobra (ingresos − gastos) desde que crearon la meta.",
       icon: "star",
       accent: "emerald",
       value: goalProgress ? `${goalProgress.pct.toFixed(0)}%` : "—",
@@ -394,6 +402,7 @@ function DashboardContent() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
         <SummaryCard
           label="Ingresos del mes"
+          help="Todo el dinero que entró este mes: sueldos e ingresos extra de los dos, según lo registrado en Ingresos. La etiqueta ▲▼ lo compara con el mes anterior. Toca para ver el detalle."
           href={`/ingresos?mes=${selectedMonth}`}
           value={totalIncome}
           icon="wallet"
@@ -403,6 +412,7 @@ function DashboardContent() {
         />
         <SummaryCard
           label="Gastos del mes"
+          help="Todo lo que gastaron este mes entre los dos. Las compras con tarjeta cuentan el día que se hicieron, no cuando se paga la tarjeta. La etiqueta ▲▼ lo compara con el mes anterior. Toca para ver el detalle."
           href={`/gastos?mes=${selectedMonth}`}
           value={totalSpent}
           icon="receipt"
@@ -412,6 +422,7 @@ function DashboardContent() {
         />
         <SummaryCard
           label="Balance del mes"
+          help="Ingresos del mes menos gastos del mes. Positivo: este mes les sobró dinero. Negativo: gastaron más de lo que entró."
           value={balance}
           icon="scale"
           accent={balance >= 0 ? "indigo" : "amber"}
@@ -420,10 +431,10 @@ function DashboardContent() {
         />
         <SummaryCard
           label="Balance acumulado"
+          help="La suma de todos los meses desde que usan la app: arrastra el sobrante (o déficit) de los meses anteriores. Es su colchón real disponible hasta hoy."
           value={accumulatedBalance}
           icon="star"
           accent={accumulatedBalance >= 0 ? "violet" : "rose"}
-          hint="Arrastra el sobrante o déficit de todos los meses anteriores"
           delta={accumulatedDelta}
           goodDirection="up"
         />
@@ -446,7 +457,7 @@ function DashboardContent() {
             title: "Alertas",
             node: (
             <div>
-              <AlertBanner alerts={alerts} />
+              <AlertBanner alerts={alerts} expenses={expenses} categories={categories} cards={cards} />
             </div>
             ),
           },
@@ -624,6 +635,7 @@ function SummaryCard({
   goodDirection,
   hint,
   href,
+  help,
 }: {
   label: string;
   value: number;
@@ -633,6 +645,7 @@ function SummaryCard({
   goodDirection: "up" | "down";
   hint?: string;
   href?: string;
+  help?: string;
 }) {
   const isGood = delta === null ? null : goodDirection === "up" ? delta >= 0 : delta <= 0;
   const content = (
@@ -649,7 +662,10 @@ function SummaryCard({
             </span>
           )}
         </div>
-        <p className="text-xs font-medium text-slate-500 mt-3">{label}</p>
+        <p className="text-xs font-medium text-slate-500 mt-3 flex items-center gap-1.5">
+          {label}
+          {help && <Help text={help} />}
+        </p>
         <p className={`text-xl md:text-2xl font-heading font-extrabold tracking-tight mt-0.5 ${value < 0 ? "text-rose-600" : "text-slate-900"}`}>
           {formatCurrency(value)}
         </p>
@@ -661,7 +677,7 @@ function SummaryCard({
       )}
     </>
   );
-  const base = "block bg-white rounded-3xl border border-slate-200/70 shadow-sm p-4 md:p-5";
+  const base = "group/help relative block bg-white rounded-3xl border border-slate-200/70 shadow-sm p-4 md:p-5";
   if (href) {
     return (
       <Link

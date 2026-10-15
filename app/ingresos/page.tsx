@@ -91,6 +91,7 @@ function IngresosContent() {
 
       <Section
         id="ingresos-recurrentes"
+        help="Sueldos y pagos que llegan cada mes. Se registran solos el día indicado, o con el botón &quot;Marcar recibido&quot;."
         icon="repeat"
         accent="emerald"
         title="Ingresos recurrentes"
@@ -119,6 +120,7 @@ function IngresosContent() {
 
       <Section
         id="ingresos-registrar"
+        help="Anota un ingreso puntual o extra: un bono, una venta, un reembolso."
         icon="plus"
         accent="sky"
         title={editingEntry ? "Editar ingreso" : "Registrar ingreso"}
@@ -142,6 +144,7 @@ function IngresosContent() {
 
       <Section
         id="ingresos-historial"
+        help="Todos los ingresos registrados en el mes elegido arriba."
         icon="list"
         accent="indigo"
         title="Historial de ingresos"

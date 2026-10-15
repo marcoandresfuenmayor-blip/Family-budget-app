@@ -98,6 +98,9 @@ export type Alert = {
   level: "red" | "yellow" | "blue";
   title: string;
   message: string;
+  categoryId?: string;
+  cardId?: string;
+  cardKind?: "closing" | "payment";
 };
 
 export function buildCategoryAlerts(
@@ -123,6 +126,7 @@ export function buildCategoryAlerts(
     if (pct >= 100) {
       alerts.push({
         id: `cat-${budget.category_id}-over`,
+        categoryId: budget.category_id,
         level: "red",
         title: `${category.icon} ${category.name}: límite superado`,
         message: `Gastaste ${formatCurrency(spent)} de ${formatCurrency(
@@ -132,6 +136,7 @@ export function buildCategoryAlerts(
     } else if (pct >= budget.alert_threshold_pct) {
       alerts.push({
         id: `cat-${budget.category_id}-warn`,
+        categoryId: budget.category_id,
         level: "yellow",
         title: `${category.icon} ${category.name}: cerca del límite`,
         message: `Llevas ${formatCurrency(spent)} de ${formatCurrency(
@@ -156,6 +161,8 @@ export function buildCardAlerts(cards: Card[], base = new Date(), windowDays = 3
     if (dClosing <= windowDays) {
       alerts.push({
         id: `card-${card.id}-closing`,
+        cardId: card.id,
+        cardKind: "closing",
         level: dClosing <= 1 ? "red" : "yellow",
         title: `💳 ${card.name}: corte próximo`,
         message:
@@ -167,6 +174,8 @@ export function buildCardAlerts(cards: Card[], base = new Date(), windowDays = 3
     if (dPayment <= windowDays) {
       alerts.push({
         id: `card-${card.id}-payment`,
+        cardId: card.id,
+        cardKind: "payment",
         level: dPayment <= 1 ? "red" : "yellow",
         title: `💳 ${card.name}: pago próximo`,
         message:
@@ -377,4 +386,61 @@ export function computeGoalProgress(
   const monthsLeft = monthlyRate > 0.01 ? Math.ceil(remaining / monthlyRate) : null;
 
   return { saved, pct, monthsLeft };
+}
+
+// -----------------------------------------------------------------
+// TARJETAS: qué paga el PRÓXIMO pago y qué queda para el siguiente
+// -----------------------------------------------------------------
+// El próximo pago (día de pago) liquida el último corte que ocurre ANTES de
+// esa fecha. Si ese corte todavía no llega, el monto sigue sumando compras.
+// Ejemplo: corte 18, pago 5. El 15/10, el pago del 5/11 cubre las compras
+// del 19/09 al 18/10 (aún abierto). Lo comprado desde el 19/10 va al pago
+// del 5/12.
+function addDaysTo(d: Date, n: number) {
+  const c = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  c.setDate(c.getDate() + n);
+  return c;
+}
+
+export type CardBilling = {
+  paymentDate: Date;
+  closingDate: Date; // corte que liquida el próximo pago
+  closed: boolean; // ese corte ya pasó (el monto ya no cambia)
+  dueExpenses: Expense[];
+  dueTotal: number;
+  nextPaymentDate: Date;
+  nextClosingDate: Date;
+  nextExpenses: Expense[]; // compras que ya caen en el pago siguiente
+  nextTotal: number;
+};
+
+export function cardBilling(expenses: Expense[], card: Card, base = new Date()): CardBilling {
+  const today = stripTime(base);
+  const paymentDate = nextOccurrence(card.payment_day, today);
+  const closingDate = previousOccurrence(card.closing_day, addDaysTo(paymentDate, -1));
+  const priorClosing = previousOccurrence(card.closing_day, addDaysTo(closingDate, -1));
+  const closed = closingDate <= today;
+  const nextPaymentDate = nextOccurrence(card.payment_day, addDaysTo(paymentDate, 1));
+  const nextClosingDate = nextOccurrence(card.closing_day, addDaysTo(closingDate, 1));
+
+  const own = expenses
+    .filter((e) => e.card_id === card.id && !e.is_card_payment)
+    .map((e) => ({ e, d: new Date(e.expense_date + "T00:00:00") }));
+  const byDateDesc = (a: Expense, b: Expense) => b.expense_date.localeCompare(a.expense_date);
+
+  const dueExpenses = own.filter(({ d }) => d > priorClosing && d <= closingDate).map(({ e }) => e).sort(byDateDesc);
+  const nextExpenses = own.filter(({ d }) => d > closingDate && d <= nextClosingDate).map(({ e }) => e).sort(byDateDesc);
+  const sum = (list: Expense[]) => list.reduce((t, e) => t + Number(e.amount), 0);
+
+  return {
+    paymentDate,
+    closingDate,
+    closed,
+    dueExpenses,
+    dueTotal: sum(dueExpenses),
+    nextPaymentDate,
+    nextClosingDate,
+    nextExpenses,
+    nextTotal: sum(nextExpenses),
+  };
 }

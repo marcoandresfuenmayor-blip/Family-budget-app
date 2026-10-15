@@ -7,28 +7,28 @@ import { useHousehold } from "@/lib/HouseholdContext";
 import Avatar from "@/components/Avatar";
 import { Icon, IconName } from "@/components/ui";
 
-const groups: { label: string; links: { href: string; icon: IconName; label: string }[] }[] = [
+const groups: { label: string; links: { href: string; icon: IconName; label: string; help: string }[] }[] = [
   {
     label: "General",
     links: [
-      { href: "/", icon: "dashboard", label: "Dashboard" },
-      { href: "/gastos", icon: "receipt", label: "Gastos" },
-      { href: "/ingresos", icon: "wallet", label: "Ingresos" },
-      { href: "/tarjetas", icon: "card", label: "Tarjetas" },
+      { href: "/", icon: "dashboard", label: "Dashboard", help: "Resumen del mes: ingresos, gastos, alertas y cómo van sus metas" },
+      { href: "/gastos", icon: "receipt", label: "Gastos", help: "Registrar y revisar gastos, gastos fijos y compras a cuotas" },
+      { href: "/ingresos", icon: "wallet", label: "Ingresos", help: "Sueldos, ingresos extra y lo que esperan recibir" },
+      { href: "/tarjetas", icon: "card", label: "Tarjetas", help: "Cortes, pagos y consumos de cada tarjeta de crédito" },
     ],
   },
   {
     label: "Análisis",
     links: [
-      { href: "/promedios", icon: "chart", label: "Promedios" },
-      { href: "/pareja", icon: "heart", label: "Pareja" },
+      { href: "/promedios", icon: "chart", label: "Promedios", help: "Cuánto pagan en promedio por cada servicio o gasto que se repite" },
+      { href: "/pareja", icon: "heart", label: "Pareja", help: "Chequeo quincenal, resumen en palabras y plata libre de cada uno" },
     ],
   },
   {
     label: "Configuración",
     links: [
-      { href: "/whatsapp", icon: "chat", label: "WhatsApp" },
-      { href: "/categorias", icon: "tag", label: "Categorías y límites" },
+      { href: "/whatsapp", icon: "chat", label: "WhatsApp", help: "Vincular sus celulares para registrar gastos por WhatsApp" },
+      { href: "/categorias", icon: "tag", label: "Categorías y límites", help: "Categorías, límites mensuales y código para invitar a tu pareja" },
     ],
   },
 ];
@@ -133,6 +133,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
                   <Link
                     key={l.href}
                     href={l.href}
+                    title={l.help}
                     className={`relative flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${
                       active ? "bg-white/10 text-white" : "hover:bg-white/5 hover:text-white"
                     }`}

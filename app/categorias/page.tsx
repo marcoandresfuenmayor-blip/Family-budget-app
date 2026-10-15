@@ -129,6 +129,7 @@ function CategoriasContent() {
 
       <Section
         id="cat-limites"
+        help="Cuánto se permiten gastar al mes en cada categoría y desde qué porcentaje quieren recibir una alerta. Un límite en 0 significa sin límite."
         icon="target"
         accent="amber"
         title="Límites por categoría"
@@ -207,6 +208,7 @@ function CategoriasContent() {
 
       <Section
         id="cat-nueva"
+        help="Crea o edita una categoría: nombre, ícono y si es un gasto reducible (que se podría recortar) o fijo."
         icon="plus"
         accent="indigo"
         title={editingCategory ? `Editar categoría: ${editingCategory.name}` : "Nueva categoría"}
@@ -244,6 +246,7 @@ function CategoriasContent() {
       {household && (
         <Section
           id="cat-invitar"
+        help="El código que tu pareja usa para unirse a este mismo hogar y ver los mismos datos."
           icon="userPlus"
           accent="pink"
           title="Invita a tu pareja"

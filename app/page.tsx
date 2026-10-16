@@ -422,7 +422,7 @@ function DashboardContent() {
         }
       />
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4">
         <SummaryCard
           label="Ingresos del mes"
           help="Todo el dinero que entró este mes: sueldos e ingresos extra de los dos, según lo registrado en Ingresos. La etiqueta ▲▼ lo compara con el mes anterior. Toca para ver el detalle."
@@ -442,15 +442,6 @@ function DashboardContent() {
           accent="rose"
           delta={spentDelta}
           goodDirection="down"
-        />
-        <SummaryCard
-          label="Balance del mes"
-          help="Ingresos del mes menos gastos del mes. Positivo: este mes les sobró dinero. Negativo: gastaron más de lo que entró."
-          value={balance}
-          icon="scale"
-          accent={balance >= 0 ? "indigo" : "amber"}
-          delta={balanceDelta}
-          goodDirection="up"
         />
         <SummaryCard
           label={isCurrentMonthSelected ? "Disponible real hoy" : "Disponible al cierre del mes"}

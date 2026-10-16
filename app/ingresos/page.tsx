@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import AuthGuard from "@/components/AuthGuard";
+import ExportExcelButton from "@/components/ExportExcelButton";
 import { useHousehold } from "@/lib/HouseholdContext";
 import { useTable } from "@/lib/hooks";
 import { supabase } from "@/lib/supabaseClient";
@@ -80,12 +81,15 @@ function IngresosContent() {
         title="Ingresos"
         subtitle="Sueldos, ingresos extra y lo que esperan recibir"
         actions={
+          <>
+          <ExportExcelButton />
           <input
             type="month"
             className="input !w-auto"
             value={monthFilter}
             onChange={(e) => setMonthFilter(e.target.value)}
           />
+          </>
         }
       />
 

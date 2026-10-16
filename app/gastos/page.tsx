@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import AuthGuard from "@/components/AuthGuard";
+import ExportExcelButton from "@/components/ExportExcelButton";
 import Avatar from "@/components/Avatar";
 import { useHousehold } from "@/lib/HouseholdContext";
 import { useTable } from "@/lib/hooks";
@@ -210,12 +211,15 @@ function GastosContent() {
         title="Gastos"
         subtitle="Registra, revisa y automatiza los gastos del hogar"
         actions={
+          <>
+          <ExportExcelButton />
           <input
             type="month"
             className="input !w-auto"
             value={monthFilter}
             onChange={(e) => setMonthFilter(e.target.value)}
           />
+          </>
         }
       />
 

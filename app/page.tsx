@@ -16,6 +16,7 @@ import {
   YAxis,
 } from "recharts";
 import AuthGuard from "@/components/AuthGuard";
+import ExportExcelButton from "@/components/ExportExcelButton";
 import AlertBanner from "@/components/AlertBanner";
 import CategoryDrilldown from "@/components/CategoryDrilldown";
 import RecommendationsPanel from "@/components/RecommendationsPanel";
@@ -374,6 +375,7 @@ function DashboardContent() {
         subtitle={<span className="capitalize">{monthLabel(selectedMonth)}</span>}
         actions={
           <>
+            <ExportExcelButton />
             <button
               onClick={() => setSelectedMonth(shiftMonth(selectedMonth, -1))}
               className="btn-secondary !px-2.5 !py-2"

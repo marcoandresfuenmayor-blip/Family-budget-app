@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   Bar,
@@ -59,6 +59,7 @@ import {
   buildCategoryAlerts,
   buildIncomeAlerts,
   buildRecommendations,
+  cashDateKey,
   computeGoalProgress,
   formatCurrency,
   isInMonth,
@@ -170,6 +171,46 @@ function DashboardContent() {
     return income - spent;
   }, [incomeEntries, expenses, endOfPrevMonth]);
   const accumulatedDelta = percentChange(accumulatedBalance, prevAccumulatedBalance);
+
+  // ---- Base de las 4 cifras de arriba: "al comprar" (cuándo se consumió) o
+  // "al pagar" (cuándo sale el dinero del banco, como el estado de cuenta).
+  const [basis, setBasis] = useState<"compra" | "pago">("compra");
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("ff-base-cifras");
+      if (saved === "pago" || saved === "compra") setBasis(saved);
+    } catch {
+      /* ignorar */
+    }
+  }, []);
+  function changeBasis(b: "compra" | "pago") {
+    setBasis(b);
+    try {
+      localStorage.setItem("ff-base-cifras", b);
+    } catch {
+      /* ignorar */
+    }
+  }
+  const cashExpenses = useMemo(
+    () => expenses.filter((e) => !e.is_card_payment).map((e) => ({ e, key: cashDateKey(e, cards) })),
+    [expenses, cards]
+  );
+  const cashSpentIn = (month: string) =>
+    cashExpenses.filter((x) => x.key.startsWith(month)).reduce((t, x) => t + Number(x.e.amount), 0);
+  const cardPaidIn = (month: string) =>
+    cashExpenses.filter((x) => x.e.card_id && x.key.startsWith(month)).reduce((t, x) => t + Number(x.e.amount), 0);
+  const cashAccumulated = (end: string) =>
+    incomeEntries.filter((i) => i.entry_date <= end).reduce((t, i) => t + Number(i.amount), 0) -
+    cashExpenses.filter((x) => x.key <= end).reduce((t, x) => t + Number(x.e.amount), 0);
+
+  const isPago = basis === "pago";
+  const sumSpent = isPago ? cashSpentIn(selectedMonth) : totalSpent;
+  const sumPrevSpent = isPago ? cashSpentIn(previousMonth) : prevTotalSpent;
+  const sumBalance = totalIncome - sumSpent;
+  const sumPrevBalance = prevTotalIncome - sumPrevSpent;
+  const sumAccum = isPago ? cashAccumulated(endOfSelectedMonth) : accumulatedBalance;
+  const sumPrevAccum = isPago ? cashAccumulated(endOfPrevMonth) : prevAccumulatedBalance;
+  const cardPaidThisMonth = cardPaidIn(selectedMonth);
 
   // Saldo de hoy (no del mes seleccionado): punto de partida del flujo de caja.
   const todayKey = toDateKey(new Date());
@@ -401,6 +442,34 @@ function DashboardContent() {
         }
       />
 
+      <div className="flex items-center justify-between flex-wrap gap-2 -mb-2">
+        <div className="group/help relative flex items-center gap-2 text-xs text-slate-500">
+          <span className="font-medium">Contar compras con tarjeta:</span>
+          <Help
+            text="Al comprar: el gasto cuenta el día de la compra (sirve para controlar en qué gastan). Al pagar: cuenta el día en que pagan la tarjeta, como lo ve el banco (sirve para saber cuánto dinero deberían tener en la cuenta)."
+          />
+        </div>
+        <div className="inline-flex bg-white border border-slate-200 rounded-xl p-1 shadow-sm">
+          {(["compra", "pago"] as const).map((b) => (
+            <button
+              key={b}
+              onClick={() => changeBasis(b)}
+              className={`text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors ${
+                basis === b ? "bg-brand-gradient text-white shadow" : "text-slate-500 hover:text-slate-800"
+              }`}
+            >
+              {b === "compra" ? "Al comprar" : "Al pagar (como el banco)"}
+            </button>
+          ))}
+        </div>
+      </div>
+      {isPago && (
+        <p className="text-xs text-slate-500 -mb-2">
+          En {monthLabel(selectedMonth)} los gastos incluyen <strong>{formatCurrency(cardPaidThisMonth)}</strong> de pagos de
+          tarjeta (compras de cortes anteriores). Las compras con tarjeta de este mes se cuentan cuando las paguen.
+        </p>
+      )}
+
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
         <SummaryCard
           label="Ingresos del mes"
@@ -414,30 +483,34 @@ function DashboardContent() {
         />
         <SummaryCard
           label="Gastos del mes"
-          help="Todo lo que gastaron este mes entre los dos. Las compras con tarjeta cuentan el día que se hicieron, no cuando se paga la tarjeta. La etiqueta ▲▼ lo compara con el mes anterior. Toca para ver el detalle."
+          help={
+            isPago
+              ? "Lo que salió del banco este mes: gastos en efectivo o débito, más lo que pagaron de tarjetas (compras de cortes anteriores). La etiqueta ▲▼ lo compara con el mes anterior."
+              : "Todo lo que gastaron este mes entre los dos. Las compras con tarjeta cuentan el día que se hicieron, no cuando se paga la tarjeta. La etiqueta ▲▼ lo compara con el mes anterior. Toca para ver el detalle."
+          }
           href={`/gastos?mes=${selectedMonth}`}
-          value={totalSpent}
+          value={sumSpent}
           icon="receipt"
           accent="rose"
-          delta={spentDelta}
+          delta={percentChange(sumSpent, sumPrevSpent)}
           goodDirection="down"
         />
         <SummaryCard
           label="Balance del mes"
           help="Ingresos del mes menos gastos del mes. Positivo: este mes les sobró dinero. Negativo: gastaron más de lo que entró."
-          value={balance}
+          value={sumBalance}
           icon="scale"
-          accent={balance >= 0 ? "indigo" : "amber"}
-          delta={balanceDelta}
+          accent={sumBalance >= 0 ? "indigo" : "amber"}
+          delta={percentChange(sumBalance, sumPrevBalance)}
           goodDirection="up"
         />
         <SummaryCard
           label="Balance acumulado"
           help="La suma de todos los meses desde que usan la app: arrastra el sobrante (o déficit) de los meses anteriores. Es su colchón real disponible hasta hoy."
-          value={accumulatedBalance}
+          value={sumAccum}
           icon="star"
-          accent={accumulatedBalance >= 0 ? "violet" : "rose"}
-          delta={accumulatedDelta}
+          accent={sumAccum >= 0 ? "violet" : "rose"}
+          delta={percentChange(sumAccum, sumPrevAccum)}
           goodDirection="up"
         />
       </div>
@@ -679,7 +752,7 @@ function SummaryCard({
       )}
     </>
   );
-  const base = "group/help relative block bg-white rounded-3xl border border-slate-200/70 shadow-sm p-4 md:p-5";
+  const base = "group/help relative hover:z-30 focus-within:z-30 block bg-white rounded-3xl border border-slate-200/70 shadow-sm p-4 md:p-5";
   if (href) {
     return (
       <Link

@@ -1,6 +1,7 @@
 // Genera y descarga un Excel con el resumen mensual, los ingresos y los
 // gastos del hogar. La librería (exceljs) se carga solo al hacer clic.
 import { Card, Category, Expense, HouseholdMember, IncomeEntry, IncomeSource } from "./types";
+import { cashDateKey } from "./utils";
 
 type Input = {
   incomes: IncomeEntry[];
@@ -41,7 +42,19 @@ export async function downloadFinanceExcel({ incomes, expenses, categories, card
   wr.getCell("A1").font = { name: "Arial", size: 14, bold: true };
   wr.getCell("A2").value = `Descargado el ${new Date().toLocaleDateString("es-ES")}. Las compras con tarjeta cuentan el día de la compra, no cuando se paga la tarjeta.`;
   wr.getCell("A2").font = { name: "Arial", size: 10, italic: true, color: { argb: "FF64748B" } };
-  const heads = ["Mes", "Ingresos", "Gastos", "Balance del mes", "Balance acumulado", "Gastos con tarjeta", "Gastos efectivo / débito", "N° de gastos"];
+  const heads = [
+    "Mes",
+    "Ingresos",
+    "Gastos",
+    "Balance del mes",
+    "Balance acumulado",
+    "Gastos con tarjeta",
+    "Gastos efectivo / débito",
+    "N° de gastos",
+    "Gastos según el banco (tarjeta al pagar)",
+    "Balance según el banco",
+    "Acumulado según el banco",
+  ];
   wr.getRow(4).values = heads;
   wr.getRow(4).eachCell((c) => {
     c.font = HEAD;
@@ -69,24 +82,31 @@ export async function downloadFinanceExcel({ incomes, expenses, categories, card
       result: cash,
     };
     row.getCell(8).value = { formula: `COUNTIFS(Gastos!$B$2:$B$${nG},A${r})`, result: count };
+    row.getCell(9).value = { formula: `SUMIFS(Gastos!$J$2:$J$${nG},Gastos!$K$2:$K$${nG},A${r})` };
+    row.getCell(10).value = { formula: `B${r}-I${r}` };
+    row.getCell(11).value = { formula: k === 0 ? `J${r}` : `K${r - 1}+J${r}` };
   });
   const last = 4 + months.length;
   const tot = wr.getRow(last + 1);
   tot.getCell(1).value = "Total";
-  ["B", "C", "D", "F", "G", "H"].forEach((L) => {
+  ["B", "C", "D", "F", "G", "H", "I", "J"].forEach((L) => {
     tot.getCell(L).value = { formula: `SUM(${L}5:${L}${last})` };
   });
   tot.getCell("E").value = { formula: `E${last}` };
+  tot.getCell("K").value = { formula: `K${last}` };
   for (let r = 5; r <= last + 1; r++) {
     const row = wr.getRow(r);
-    for (let c = 1; c <= 8; c++) {
+    for (let c = 1; c <= 11; c++) {
       const cell = row.getCell(c);
       cell.font = r === last + 1 ? { ...FONT, bold: true } : FONT;
-      if (c >= 2 && c <= 7) cell.numFmt = MONEY;
+      if ((c >= 2 && c <= 7) || c >= 9) cell.numFmt = MONEY;
       if (r === last + 1) cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFEEF2FF" } };
     }
   }
-  wr.columns = [12, 14, 14, 16, 18, 16, 20, 12].map((width) => ({ width }));
+  wr.columns = [12, 14, 14, 16, 18, 16, 20, 12, 22, 18, 18].map((width) => ({ width }));
+  wr.getCell(`A${last + 3}`).value =
+    "Columnas 'según el banco': las compras con tarjeta se cuentan en el mes en que se paga la tarjeta (no el de la compra). Sirven para comparar con el saldo real de sus cuentas.";
+  wr.getCell(`A${last + 3}`).font = { name: "Arial", size: 9, italic: true, color: { argb: "FF64748B" } };
 
   // ---------- Ingresos
   const wi = wb.addWorksheet("Ingresos", { views: [{ state: "frozen", ySplit: 1 }] });
@@ -117,6 +137,7 @@ export async function downloadFinanceExcel({ incomes, expenses, categories, card
     { header: "Fijo automático", width: 12 },
     { header: "Cuota diferida", width: 12 },
     { header: "Monto", width: 12 },
+    { header: "Mes en que sale del banco", width: 14 },
   ];
   exp.forEach((e) => {
     wg.addRow([
@@ -130,12 +151,13 @@ export async function downloadFinanceExcel({ incomes, expenses, categories, card
       e.recurring_expense_id ? "Sí" : "No",
       e.installment_purchase_id ? "Sí" : "No",
       Number(e.amount),
+      cashDateKey(e, cards).slice(0, 7),
     ]);
   });
 
   for (const [ws, moneyCol, cols] of [
     [wi, 7, 7],
-    [wg, 10, 10],
+    [wg, 10, 11],
   ] as const) {
     ws.getRow(1).eachCell((c) => {
       c.font = HEAD;

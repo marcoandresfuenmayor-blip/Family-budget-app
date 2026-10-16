@@ -193,7 +193,7 @@ export function Section({
   return (
     <section
       ref={ref}
-      className={`bg-white rounded-3xl border border-slate-200/70 shadow-sm transition-shadow scroll-mt-24 ${
+      className={`relative hover:z-20 focus-within:z-20 bg-white rounded-3xl border border-slate-200/70 shadow-sm transition-shadow scroll-mt-24 ${
         open ? "shadow-md" : "hover:shadow-md"
       }`}
     >

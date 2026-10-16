@@ -178,7 +178,7 @@ export default function SectionMosaic({
               onDragOver={(e) => editing && e.preventDefault()}
               onDrop={() => editing && dropOn(key)}
               onDragEnd={() => setDragKey(null)}
-              className={`group/help relative ${dragKey === key ? "opacity-40" : ""}`}
+              className={`group/help relative hover:z-30 focus-within:z-30 ${dragKey === key ? "opacity-40" : ""}`}
             >
               <button
                 onClick={() => !editing && toggle(key)}

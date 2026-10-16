@@ -444,3 +444,26 @@ export function cardBilling(expenses: Expense[], card: Card, base = new Date()):
     nextTotal: sum(nextExpenses),
   };
 }
+
+// -----------------------------------------------------------------
+// FECHA DE PAGO (CAJA): cuándo sale realmente el dinero del banco
+// -----------------------------------------------------------------
+// Una compra con tarjeta no sale del banco el día de la compra, sino el día
+// de pago del corte al que pertenece. Ej.: tarjeta corte 18 / pago 5:
+// compra del 10-sep -> corte 18-sep -> se paga el 5-oct.
+function keyOf(d: Date) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+export function cardPaymentDateKey(card: Card, purchaseKey: string) {
+  const purchase = new Date(purchaseKey + "T00:00:00");
+  const closing = nextOccurrence(card.closing_day, purchase); // el mismo día si es día de corte
+  return keyOf(nextOccurrence(card.payment_day, addDaysTo(closing, 1)));
+}
+
+// Fecha en que el gasto afecta la cuenta bancaria.
+export function cashDateKey(e: Expense, cards: Card[]) {
+  if (!e.card_id) return e.expense_date;
+  const card = cards.find((c) => c.id === e.card_id);
+  return card ? cardPaymentDateKey(card, e.expense_date) : e.expense_date;
+}

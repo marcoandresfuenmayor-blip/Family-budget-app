@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import {
   Bar,
@@ -172,48 +172,28 @@ function DashboardContent() {
   }, [incomeEntries, expenses, endOfPrevMonth]);
   const accumulatedDelta = percentChange(accumulatedBalance, prevAccumulatedBalance);
 
-  // ---- Base de las 4 cifras de arriba: "al comprar" (cuándo se consumió) o
-  // "al pagar" (cuándo sale el dinero del banco, como el estado de cuenta).
-  const [basis, setBasis] = useState<"compra" | "pago">("compra");
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem("ff-base-cifras");
-      if (saved === "pago" || saved === "compra") setBasis(saved);
-    } catch {
-      /* ignorar */
-    }
-  }, []);
-  function changeBasis(b: "compra" | "pago") {
-    setBasis(b);
-    try {
-      localStorage.setItem("ff-base-cifras", b);
-    } catch {
-      /* ignorar */
-    }
-  }
+  // Saldo de hoy (no del mes seleccionado): punto de partida del flujo de caja.
+  const todayKey = toDateKey(new Date());
+
+  // ---- Disponible real: lo que debería haber en las cuentas (las compras con
+  // tarjeta salen del banco el día que se paga la tarjeta) menos lo que se
+  // debe a las tarjetas (compras ya hechas que aún no se pagan, incluidas
+  // las del corte anterior). Para el mes en curso se corta en HOY.
   const cashExpenses = useMemo(
     () => expenses.filter((e) => !e.is_card_payment).map((e) => ({ e, key: cashDateKey(e, cards) })),
     [expenses, cards]
   );
-  const cashSpentIn = (month: string) =>
-    cashExpenses.filter((x) => x.key.startsWith(month)).reduce((t, x) => t + Number(x.e.amount), 0);
-  const cardPaidIn = (month: string) =>
-    cashExpenses.filter((x) => x.e.card_id && x.key.startsWith(month)).reduce((t, x) => t + Number(x.e.amount), 0);
-  const cashAccumulated = (end: string) =>
-    incomeEntries.filter((i) => i.entry_date <= end).reduce((t, i) => t + Number(i.amount), 0) -
-    cashExpenses.filter((x) => x.key <= end).reduce((t, x) => t + Number(x.e.amount), 0);
-
-  const isPago = basis === "pago";
-  const sumSpent = isPago ? cashSpentIn(selectedMonth) : totalSpent;
-  const sumPrevSpent = isPago ? cashSpentIn(previousMonth) : prevTotalSpent;
-  const sumBalance = totalIncome - sumSpent;
-  const sumPrevBalance = prevTotalIncome - sumPrevSpent;
-  const sumAccum = isPago ? cashAccumulated(endOfSelectedMonth) : accumulatedBalance;
-  const sumPrevAccum = isPago ? cashAccumulated(endOfPrevMonth) : prevAccumulatedBalance;
-  const cardPaidThisMonth = cardPaidIn(selectedMonth);
-
-  // Saldo de hoy (no del mes seleccionado): punto de partida del flujo de caja.
-  const todayKey = toDateKey(new Date());
+  const position = (cut: string) => {
+    const income = incomeEntries.filter((i) => i.entry_date <= cut).reduce((t, i) => t + Number(i.amount), 0);
+    const out = cashExpenses.filter((x) => x.key <= cut).reduce((t, x) => t + Number(x.e.amount), 0);
+    const owed = cashExpenses
+      .filter((x) => x.e.card_id && x.e.expense_date <= cut && x.key > cut)
+      .reduce((t, x) => t + Number(x.e.amount), 0);
+    return { inAccounts: income - out, owed, available: income - out - owed };
+  };
+  const positionCut = isCurrentMonthSelected ? todayKey : endOfSelectedMonth;
+  const pos = position(positionCut);
+  const prevPos = position(endOfPrevMonth);
   const balanceToday = useMemo(() => {
     const income = incomeEntries.filter((e) => e.entry_date <= todayKey).reduce((s, e) => s + Number(e.amount), 0);
     const spent = expenses.filter((e) => e.expense_date <= todayKey).reduce((s, e) => s + Number(e.amount), 0);
@@ -442,34 +422,6 @@ function DashboardContent() {
         }
       />
 
-      <div className="flex items-center justify-between flex-wrap gap-2 -mb-2">
-        <div className="group/help relative flex items-center gap-2 text-xs text-slate-500">
-          <span className="font-medium">Contar compras con tarjeta:</span>
-          <Help
-            text="Al comprar: el gasto cuenta el día de la compra (sirve para controlar en qué gastan). Al pagar: cuenta el día en que pagan la tarjeta, como lo ve el banco (sirve para saber cuánto dinero deberían tener en la cuenta)."
-          />
-        </div>
-        <div className="inline-flex bg-white border border-slate-200 rounded-xl p-1 shadow-sm">
-          {(["compra", "pago"] as const).map((b) => (
-            <button
-              key={b}
-              onClick={() => changeBasis(b)}
-              className={`text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors ${
-                basis === b ? "bg-brand-gradient text-white shadow" : "text-slate-500 hover:text-slate-800"
-              }`}
-            >
-              {b === "compra" ? "Al comprar" : "Al pagar (como el banco)"}
-            </button>
-          ))}
-        </div>
-      </div>
-      {isPago && (
-        <p className="text-xs text-slate-500 -mb-2">
-          En {monthLabel(selectedMonth)} los gastos incluyen <strong>{formatCurrency(cardPaidThisMonth)}</strong> de pagos de
-          tarjeta (compras de cortes anteriores). Las compras con tarjeta de este mes se cuentan cuando las paguen.
-        </p>
-      )}
-
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
         <SummaryCard
           label="Ingresos del mes"
@@ -483,35 +435,37 @@ function DashboardContent() {
         />
         <SummaryCard
           label="Gastos del mes"
-          help={
-            isPago
-              ? "Lo que salió del banco este mes: gastos en efectivo o débito, más lo que pagaron de tarjetas (compras de cortes anteriores). La etiqueta ▲▼ lo compara con el mes anterior."
-              : "Todo lo que gastaron este mes entre los dos. Las compras con tarjeta cuentan el día que se hicieron, no cuando se paga la tarjeta. La etiqueta ▲▼ lo compara con el mes anterior. Toca para ver el detalle."
-          }
+          help="Todo lo que gastaron este mes entre los dos. Las compras con tarjeta cuentan el día que se hicieron, no cuando se paga la tarjeta. La etiqueta ▲▼ lo compara con el mes anterior. Toca para ver el detalle."
           href={`/gastos?mes=${selectedMonth}`}
-          value={sumSpent}
+          value={totalSpent}
           icon="receipt"
           accent="rose"
-          delta={percentChange(sumSpent, sumPrevSpent)}
+          delta={spentDelta}
           goodDirection="down"
         />
         <SummaryCard
           label="Balance del mes"
           help="Ingresos del mes menos gastos del mes. Positivo: este mes les sobró dinero. Negativo: gastaron más de lo que entró."
-          value={sumBalance}
+          value={balance}
           icon="scale"
-          accent={sumBalance >= 0 ? "indigo" : "amber"}
-          delta={percentChange(sumBalance, sumPrevBalance)}
+          accent={balance >= 0 ? "indigo" : "amber"}
+          delta={balanceDelta}
           goodDirection="up"
         />
         <SummaryCard
-          label="Balance acumulado"
-          help="La suma de todos los meses desde que usan la app: arrastra el sobrante (o déficit) de los meses anteriores. Es su colchón real disponible hasta hoy."
-          value={sumAccum}
+          label={isCurrentMonthSelected ? "Disponible real hoy" : "Disponible al cierre del mes"}
+          help="Lo que les queda libre de verdad: el dinero que debería haber en sus cuentas menos todo lo que deben a las tarjetas (incluidas las compras del corte anterior que aún no pagan). Toca para ver las tarjetas."
+          href="/tarjetas"
+          linkText="Ver tarjetas"
+          value={pos.available}
           icon="star"
-          accent={sumAccum >= 0 ? "violet" : "rose"}
-          delta={percentChange(sumAccum, sumPrevAccum)}
+          accent={pos.available >= 0 ? "violet" : "rose"}
+          delta={percentChange(pos.available, prevPos.available)}
           goodDirection="up"
+          lines={[
+            ["En cuentas", pos.inAccounts],
+            ["Tarjetas por pagar", -pos.owed],
+          ]}
         />
       </div>
 
@@ -711,6 +665,8 @@ function SummaryCard({
   hint,
   href,
   help,
+  lines,
+  linkText = "Ver detalle",
 }: {
   label: string;
   value: number;
@@ -721,6 +677,8 @@ function SummaryCard({
   hint?: string;
   href?: string;
   help?: string;
+  lines?: [string, number][];
+  linkText?: string;
 }) {
   const isGood = delta === null ? null : goodDirection === "up" ? delta >= 0 : delta <= 0;
   const content = (
@@ -745,9 +703,19 @@ function SummaryCard({
           {formatCurrency(value)}
         </p>
         {hint && <p className="text-[11px] text-slate-400 mt-1 leading-snug hidden md:block">{hint}</p>}
+        {lines && (
+          <div className="mt-2 space-y-0.5">
+            {lines.map(([k, v]) => (
+              <p key={k} className="text-[11px] text-slate-500 flex justify-between gap-2">
+                <span>{k}</span>
+                <span className="font-semibold tabular-nums">{formatCurrency(v)}</span>
+              </p>
+            ))}
+          </div>
+        )}
       {href && (
         <p className="text-[11px] font-semibold text-indigo-600 mt-2 flex items-center gap-1">
-          Ver detalle <Icon name="chevronRight" className="w-3 h-3" />
+          {linkText} <Icon name="chevronRight" className="w-3 h-3" />
         </p>
       )}
     </>

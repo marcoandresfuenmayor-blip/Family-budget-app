@@ -1057,7 +1057,12 @@ function ExpenseForm({
   const [isRecurring, setIsRecurring] = useState(false);
   const [isExtra, setIsExtra] = useState(false);
   const [isFreeMoney, setIsFreeMoney] = useState(false);
+  const [addVat, setAddVat] = useState(false);
   const [saving, setSaving] = useState(false);
+  // Servicios digitales (Uber, Netflix, Apple...) pagados con tarjeta: el
+  // banco cobra 15% de IVA aparte. Si se marca, se guarda el valor con IVA.
+  const vatApplies = addVat && !!cardId;
+  const finalAmount = vatApplies ? Math.round(Number(amount) * 1.15 * 100) / 100 : Number(amount);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -1080,6 +1085,7 @@ function ExpenseForm({
       setIsExtra(false);
       setIsFreeMoney(false);
     }
+    setAddVat(false);
     setError(null);
   }, [editingExpense]);
 
@@ -1088,7 +1094,7 @@ function ExpenseForm({
       .from("expenses")
       .select("id, description")
       .eq("expense_date", date)
-      .eq("amount", Number(amount));
+      .eq("amount", finalAmount);
     if (!data) return false;
     const desc = description.trim().toLowerCase();
     return data.some((d) => d.id !== editingExpense?.id && d.description.trim().toLowerCase() === desc);
@@ -1100,7 +1106,7 @@ function ExpenseForm({
 
     if (await isDuplicate()) {
       const proceed = confirm(
-        `Ya existe un gasto de ${formatCurrency(Number(amount))} el ${date} con la misma descripción ("${description}"). ¿Quieres guardarlo de todas formas?`
+        `Ya existe un gasto de ${formatCurrency(finalAmount)} el ${date} con la misma descripción ("${description}"). ¿Quieres guardarlo de todas formas?`
       );
       if (!proceed) return;
     }
@@ -1115,7 +1121,7 @@ function ExpenseForm({
           category_id: categoryId,
           card_id: cardId || null,
           description,
-          amount: Number(amount),
+          amount: finalAmount,
           expense_date: date,
           is_recurring: isRecurring,
           is_extra: isExtra,
@@ -1135,7 +1141,7 @@ function ExpenseForm({
         category_id: categoryId,
         card_id: cardId || null,
         description,
-        amount: Number(amount),
+        amount: finalAmount,
         expense_date: date,
         is_recurring: isRecurring,
         is_extra: isExtra,
@@ -1238,6 +1244,18 @@ function ExpenseForm({
           <input type="checkbox" checked={isFreeMoney} onChange={(e) => setIsFreeMoney(e.target.checked)} />
           🎈 De mi plata libre
         </label>
+        {cardId && (
+          <label
+            className="flex items-center gap-2 text-sm text-slate-600"
+            title="Uber, Uber Eats, Netflix, Apple, Spotify y otros servicios digitales pagados con tarjeta: el banco cobra 15% de IVA aparte en el estado de cuenta."
+          >
+            <input type="checkbox" checked={addVat} onChange={(e) => setAddVat(e.target.checked)} />
+            📱 Servicio digital (+15% IVA)
+            {vatApplies && Number(amount) > 0 && (
+              <span className="text-xs font-semibold text-brand-700">→ se guarda {formatCurrency(finalAmount)}</span>
+            )}
+          </label>
+        )}
 
         {error && <p className="text-sm text-red-600">{error}</p>}
 

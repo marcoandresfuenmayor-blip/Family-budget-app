@@ -17,6 +17,7 @@ import {
 } from "recharts";
 import AuthGuard from "@/components/AuthGuard";
 import ExportExcelButton from "@/components/ExportExcelButton";
+import ProfileBanner from "@/components/ProfileBanner";
 import AlertBanner from "@/components/AlertBanner";
 import CategoryDrilldown from "@/components/CategoryDrilldown";
 import RecommendationsPanel from "@/components/RecommendationsPanel";
@@ -421,6 +422,8 @@ function DashboardContent() {
           </>
         }
       />
+
+      <ProfileBanner />
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4">
         <SummaryCard

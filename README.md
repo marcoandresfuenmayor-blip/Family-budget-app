@@ -175,6 +175,16 @@ ya se aplicó automáticamente vía el conector de Supabase. No tienes que corre
   funciones que los crean quedaron corregidas.
 - Corrección: al registrar de noche, la fecha por defecto ya no salta al día siguiente.
 
+## 3.6.1 Mejoras v9 (ya aplicadas en tu base de datos)
+
+Archivo: `supabase/migration_v9_perfil_feedback_admin.sql`.
+
+- **Sugerir límites** (Categorías y límites): propone un límite por categoría con el promedio de los últimos 3 meses completos (reducibles −5%, redondeado a $5). Nada se guarda hasta tocar "Aplicar".
+- **Mi perfil** (`/perfil`): año de nacimiento, género y ciudad, opcionales y con consentimiento. Se pueden borrar en cualquier momento.
+- **Botón "Opinión"** en todas las pantallas: nota de recomendación 0-10 (NPS), tipo (idea, problema, me gusta) y comentario.
+- **Clientes** (`/admin`, solo administradores): usuarios, hogares activos, NPS, edad, género, ciudad y comentarios, siempre agrupados y sin nombres ni montos. Para agregar otro administrador:
+  `insert into app_admins (user_id) values ('<uuid del usuario>');`
+
 ## 3.7 Conectar WhatsApp (una sola vez, ~20 minutos)
 
 La app ya tiene todo listo para recibir mensajes; falta crear la conexión con WhatsApp en Meta

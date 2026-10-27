@@ -5,9 +5,10 @@ import AuthGuard from "@/components/AuthGuard";
 import { useHousehold } from "@/lib/HouseholdContext";
 import { useTable } from "@/lib/hooks";
 import { supabase } from "@/lib/supabaseClient";
-import { Category, CategoryBudget, Household } from "@/lib/types";
+import { Category, CategoryBudget, Expense, Household } from "@/lib/types";
 import { formatCurrency } from "@/lib/utils";
 import { PageHeader, Pill, Section } from "@/components/ui";
+import SuggestLimits from "@/components/SuggestLimits";
 
 export default function CategoriasPage() {
   return (
@@ -28,6 +29,7 @@ function CategoriasContent() {
     "category_budgets",
     householdId
   );
+  const { data: expenses } = useTable<Expense>("expenses", householdId);
   const [household, setHousehold] = useState<Household | null>(null);
 
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
@@ -136,6 +138,13 @@ function CategoriasContent() {
         subtitle="Cuánto pueden gastar al mes y desde qué % avisar"
         badge={<Pill tone="amber">{formatCurrency(budgets.reduce((s, b) => s + Number(b.monthly_limit), 0))}/mes</Pill>}
       >
+      <SuggestLimits
+        categories={categories}
+        budgets={budgets}
+        expenses={expenses}
+        householdId={householdId}
+        onApplied={refreshBudgets}
+      />
       <div className="card">
         <table className="w-full text-sm">
           <thead>
@@ -160,6 +169,7 @@ function CategoriasContent() {
                   </td>
                   <td className="py-2 pr-2">
                     <input
+                      key={`${c.id}-${budget?.monthly_limit ?? 0}`}
                       type="number"
                       min="0"
                       step="1"

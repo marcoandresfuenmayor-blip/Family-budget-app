@@ -5,7 +5,9 @@ import { usePathname } from "next/navigation";
 import { ReactNode, useEffect, useRef, useState } from "react";
 import { useHousehold } from "@/lib/HouseholdContext";
 import Avatar from "@/components/Avatar";
+import FeedbackButton from "@/components/FeedbackButton";
 import { Icon, IconName } from "@/components/ui";
+import { supabase } from "@/lib/supabaseClient";
 
 const groups: { label: string; links: { href: string; icon: IconName; label: string; help: string }[] }[] = [
   {
@@ -29,9 +31,17 @@ const groups: { label: string; links: { href: string; icon: IconName; label: str
     links: [
       { href: "/whatsapp", icon: "chat", label: "WhatsApp", help: "Vincular sus celulares para registrar gastos por WhatsApp" },
       { href: "/categorias", icon: "tag", label: "Categorías y límites", help: "Categorías, límites mensuales y código para invitar a tu pareja" },
+      { href: "/perfil", icon: "users", label: "Mi perfil", help: "Edad, género y ciudad (opcional) para ayudarnos a mejorar la app" },
     ],
   },
 ];
+
+const adminGroup = {
+  label: "Administración",
+  links: [
+    { href: "/admin", icon: "chart" as IconName, label: "Clientes", help: "Quiénes usan la app y qué opinan (datos agrupados y anónimos)" },
+  ],
+};
 
 const PIN_KEY = "ff-menu-fijado";
 
@@ -59,7 +69,13 @@ export default function AppShell({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false);
   const [pinned, setPinned] = useState(false);
   const [userMenu, setUserMenu] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
   const userRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!session) return;
+    supabase.rpc("is_app_admin").then(({ data }) => setIsAdmin(data === true));
+  }, [session]);
 
   useEffect(() => {
     try {
@@ -123,7 +139,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
         </button>
       </div>
       <div className="flex-1 overflow-y-auto px-3 py-4 space-y-5">
-        {groups.map((g) => (
+        {(isAdmin ? [...groups, adminGroup] : groups).map((g) => (
           <div key={g.label}>
             <p className="px-3 mb-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">{g.label}</p>
             <div className="space-y-0.5">
@@ -229,6 +245,13 @@ export default function AppShell({ children }: { children: ReactNode }) {
                       <p className="text-sm font-semibold text-slate-800 truncate">{name}</p>
                       <p className="text-xs text-slate-500 truncate">{session.user.email}</p>
                     </div>
+                    <Link
+                      href="/perfil"
+                      className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-sm text-slate-700 hover:bg-slate-50"
+                    >
+                      <Icon name="users" className="w-4 h-4" />
+                      Mi perfil
+                    </Link>
                     <button
                       onClick={signOut}
                       className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-sm text-rose-600 hover:bg-rose-50"
@@ -242,8 +265,9 @@ export default function AppShell({ children }: { children: ReactNode }) {
             </div>
           </div>
         </header>
-        <main className="max-w-6xl mx-auto px-4 py-6 space-y-0">{children}</main>
+        <main className="max-w-6xl mx-auto px-4 py-6 pb-20 space-y-0">{children}</main>
       </div>
+      <FeedbackButton />
     </div>
   );
 }

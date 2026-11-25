@@ -88,8 +88,8 @@ export function parseExpenseMessage(
 
   const isFreeMoney = hasWord(norm, "libre");
   if (isFreeMoney) norm = removeWord(norm, "libre");
-  const isExtra = hasWord(norm, "extra");
-  if (isExtra) norm = removeWord(norm, "extra");
+  const isExtra = hasWord(norm, "extra") || hasWord(norm, "imprevisto");
+  if (isExtra) norm = removeWord(removeWord(norm, "extra"), "imprevisto");
 
   // Tarjeta: si se menciona el nombre de alguna.
   let cardId: string | null = null;
@@ -207,7 +207,7 @@ export const HELP_TEXT = [
   "• *gasolina 20* → registra $20 (la categoría la adivino)",
   "• *supermaxi 34,50 daya* → con la tarjeta Daya",
   "• *almuerzo 8 libre* → de tu plata libre",
-  "• *cine 12 extra* → marcado como no planeado",
+  "• *mecánico 80 imprevisto* → marcado como imprevisto",
   "• *cuánto llevo en alimentación* → cómo van en esa categoría",
   "• *resumen* → el mes en un mensaje",
   "• *deshacer* → borra lo último que registraste por aquí",

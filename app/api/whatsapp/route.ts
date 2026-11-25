@@ -251,7 +251,7 @@ async function registerExpense(db: SupabaseClient, link: Link, text: string, waI
     `✅ Registrado: *${money(parsed.amount)}* · ${parsed.description}`,
     `${cat ? `${cat.icon} ${cat.name}` : ""}${card ? ` · 💳 ${card.name}` : " · efectivo / sin tarjeta"}`,
   ];
-  const tags = [parsed.isFreeMoney ? "🎈 plata libre" : "", parsed.isExtra ? "⚡ no planeado" : ""].filter(Boolean);
+  const tags = [parsed.isFreeMoney ? "🎈 plata libre" : "", parsed.isExtra ? "⚡ imprevisto" : ""].filter(Boolean);
   if (tags.length) lines.push(tags.join(" · "));
   if (limit > 0) {
     const pct = (spent / limit) * 100;

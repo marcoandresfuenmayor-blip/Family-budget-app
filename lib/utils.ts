@@ -295,8 +295,8 @@ export function buildRecommendations(
   if (extrasTotal > 0 && totalExpenses > 0 && extrasTotal / totalExpenses > 0.1) {
     recs.push({
       id: "rec-extras",
-      title: "Muchos gastos no planeados",
-      detail: `Los gastos extra suman ${formatCurrency(
+      title: "Muchos imprevistos este mes",
+      detail: `Los imprevistos suman ${formatCurrency(
         extrasTotal
       )} (${((extrasTotal / totalExpenses) * 100).toFixed(
         0

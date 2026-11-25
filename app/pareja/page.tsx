@@ -389,7 +389,7 @@ function Narrative({
           .{" "}
           {extras > 0 ? (
             <>
-              Los gastos no planeados (&quot;extra&quot;) suman <strong>{formatCurrency(extras)}</strong>, el{" "}
+              Los imprevistos suman <strong>{formatCurrency(extras)}</strong>, el{" "}
               {((extras / total) * 100).toFixed(0)}% del total.
             </>
           ) : (

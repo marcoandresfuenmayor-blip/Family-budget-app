@@ -18,6 +18,9 @@ import {
 import AuthGuard from "@/components/AuthGuard";
 import ExportExcelButton from "@/components/ExportExcelButton";
 import ProfileBanner from "@/components/ProfileBanner";
+import WeeklyReminder from "@/components/WeeklyReminder";
+import CardProjectionPanel from "@/components/CardProjectionPanel";
+import { projectCards } from "@/lib/cardProjection";
 import AlertBanner from "@/components/AlertBanner";
 import CategoryDrilldown from "@/components/CategoryDrilldown";
 import RecommendationsPanel from "@/components/RecommendationsPanel";
@@ -47,6 +50,7 @@ import {
 const DEFAULT_ORDER = [
   "recomendaciones",
   "alertas",
+  "proyeccion",
   "flujo",
   "graficos",
   "tendencia",
@@ -317,7 +321,33 @@ function DashboardContent() {
   const goalProgress = firstGoal ? computeGoalProgress(firstGoal, incomeEntries, expenses) : null;
   const redAlerts = alerts.some((a) => a.level === "red");
 
+  const cardProjections = useMemo(
+    () => projectCards(expenses, cards, recurringExpenses, installmentPurchases),
+    [expenses, cards, recurringExpenses, installmentPurchases]
+  );
+  const projNextTotal = cardProjections.reduce((t, p) => t + p.next.projected, 0);
+  const projPrevTotal = cardProjections.reduce((t, p) => t + p.previousPayment, 0);
+  const projNextDate = cardProjections.reduce<Date | null>(
+    (m, p) => (!m || p.next.paymentDate < m ? p.next.paymentDate : m),
+    null
+  );
+  const projUp = projPrevTotal > 0 && projNextTotal > projPrevTotal * 1.05;
+
   const sectionMeta: Record<string, { help: string; icon: IconName; accent: Accent; value: string; caption: string; progress?: number | null; tone?: "bad" | "good" | "neutral" }> = {
+    proyeccion: {
+      help: "Cuánto les tocará pagar de tarjetas en el próximo pago, comparado con el pago anterior. Si el corte aún no cierra, se proyecta con lo que ya llevan, los fijos y cuotas que faltan y su ritmo de gasto diario.",
+      icon: "card",
+      accent: "sky",
+      value: money0(projNextTotal),
+      caption: projNextDate
+        ? `pago del ${projNextDate.toLocaleDateString("es-ES", { day: "numeric", month: "short" })}${
+            projPrevTotal > 0
+              ? ` · ${projNextTotal >= projPrevTotal ? "▲" : "▼"} ${money0(Math.abs(projNextTotal - projPrevTotal))} vs. anterior`
+              : ""
+          }`
+        : "sin tarjetas",
+      tone: projUp ? "bad" : "neutral",
+    },
     recomendaciones: {
       help: "Sugerencias automáticas para ahorrar, según cómo van sus gastos frente a sus límites e ingresos del mes.",
       icon: "bulb",
@@ -424,6 +454,7 @@ function DashboardContent() {
       />
 
       <ProfileBanner />
+      <WeeklyReminder expenses={expenses} />
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4">
         <SummaryCard
@@ -483,6 +514,12 @@ function DashboardContent() {
               <AlertBanner alerts={alerts} expenses={expenses} categories={categories} cards={cards} />
             </div>
             ),
+          },
+          {
+            key: "proyeccion",
+            ...sectionMeta.proyeccion,
+            title: "Pago de tarjetas",
+            node: <CardProjectionPanel projections={cardProjections} />,
           },
           {
             key: "flujo",

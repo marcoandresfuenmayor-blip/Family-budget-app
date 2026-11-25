@@ -133,7 +133,7 @@ export async function downloadFinanceExcel({ incomes, expenses, categories, card
     { header: "Categoría", width: 28 },
     { header: "Tarjeta", width: 18 },
     { header: "Registró", width: 16 },
-    { header: "Extra (no planeado)", width: 12 },
+    { header: "Imprevisto", width: 12 },
     { header: "Fijo automático", width: 12 },
     { header: "Cuota diferida", width: 12 },
     { header: "Monto", width: 12 },

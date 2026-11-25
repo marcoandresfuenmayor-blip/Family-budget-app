@@ -185,6 +185,13 @@ Archivo: `supabase/migration_v9_perfil_feedback_admin.sql`.
 - **Clientes** (`/admin`, solo administradores): usuarios, hogares activos, NPS, edad, género, ciudad y comentarios, siempre agrupados y sin nombres ni montos. Para agregar otro administrador:
   `insert into app_admins (user_id) values ('<uuid del usuario>');`
 
+## 3.6.2 Mejoras de noviembre 2026 (sin cambios de base de datos)
+
+- **Autocompletar** descripciones en Gastos (rellena categoría y tarjeta con el último uso).
+- **Pago de tarjetas** en el Dashboard: próximo pago vs. el anterior y proyección del corte en curso.
+- **Revisión semanal**: aviso de días sin gastos y gastos habituales que faltan.
+- La marca "extra" pasa a ser **"⚡ Imprevisto"**. Las marcas antiguas se reiniciaron; el respaldo está en la tabla `backup_expenses_is_extra_20261124`.
+
 ## 3.7 Conectar WhatsApp (una sola vez, ~20 minutos)
 
 La app ya tiene todo listo para recibir mensajes; falta crear la conexión con WhatsApp en Meta

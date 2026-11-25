@@ -86,7 +86,7 @@ export default function CategoryDrilldown({
                             )}
                             {e.is_extra && (
                               <span className="bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded flex-shrink-0">
-                                extra
+                                ⚡ imprevisto
                               </span>
                             )}
                             {e.is_recurring && (

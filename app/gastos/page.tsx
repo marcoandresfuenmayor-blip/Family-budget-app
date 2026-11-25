@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import AuthGuard from "@/components/AuthGuard";
 import ExportExcelButton from "@/components/ExportExcelButton";
 import Avatar from "@/components/Avatar";
@@ -10,7 +10,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { Card, Category, Expense, HouseholdMember, InstallmentPurchase, RecurringExpense } from "@/lib/types";
 import { formatCurrency, monthLabel, nextOccurrence } from "@/lib/utils";
 import { PageHeader, Pill, Section, Tip } from "@/components/ui";
-import { monthEndKey, toDateKey } from "@/lib/insights";
+import { descriptionKey, monthEndKey, normalizeText, stripAutoSuffix, toDateKey } from "@/lib/insights";
 
 export default function GastosPage() {
   return (
@@ -233,6 +233,7 @@ function GastosContent() {
         openSignal={editingExpense?.id}
       >
       <ExpenseForm
+        history={expenses}
         categories={categories}
         cards={cards}
         householdId={householdId}
@@ -301,7 +302,7 @@ function GastosContent() {
                         {e.description}
                         {e.is_extra && (
                           <span className="ml-2 text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">
-                            extra
+                            ⚡ imprevisto
                           </span>
                         )}
                         {e.is_recurring && (
@@ -1032,7 +1033,43 @@ function InstallmentManager({
   );
 }
 
+type Suggestion = {
+  key: string;
+  label: string;
+  count: number;
+  categoryId: string;
+  cardId: string | null;
+  lastAmount: number;
+};
+
+// Descripciones que ya usaron, agrupadas sin importar mayúsculas, tildes ni
+// "(automático)". Se muestran primero las más frecuentes.
+function buildSuggestions(history: Expense[]): Suggestion[] {
+  const map = new Map<string, Suggestion & { lastDate: string }>();
+  for (const e of history) {
+    if (e.is_card_payment) continue;
+    const label = stripAutoSuffix(e.description);
+    const key = descriptionKey(e.description);
+    if (!key || /^ajuste/.test(key)) continue;
+    const prev = map.get(key);
+    if (!prev) {
+      map.set(key, { key, label, count: 1, categoryId: e.category_id, cardId: e.card_id, lastAmount: Number(e.amount), lastDate: e.expense_date });
+    } else {
+      prev.count += 1;
+      if (e.expense_date > prev.lastDate) {
+        prev.lastDate = e.expense_date;
+        prev.label = label;
+        prev.categoryId = e.category_id;
+        prev.cardId = e.card_id;
+        prev.lastAmount = Number(e.amount);
+      }
+    }
+  }
+  return Array.from(map.values()).sort((a, b) => b.count - a.count || b.lastDate.localeCompare(a.lastDate));
+}
+
 function ExpenseForm({
+  history,
   categories,
   cards,
   householdId,
@@ -1041,6 +1078,7 @@ function ExpenseForm({
   onCancelEdit,
   onSaved,
 }: {
+  history: Expense[];
   categories: Category[];
   cards: Card[];
   householdId: string | null;
@@ -1058,6 +1096,27 @@ function ExpenseForm({
   const [isExtra, setIsExtra] = useState(false);
   const [isFreeMoney, setIsFreeMoney] = useState(false);
   const [addVat, setAddVat] = useState(false);
+  const [showSuggest, setShowSuggest] = useState(false);
+  const [lastHint, setLastHint] = useState<string | null>(null);
+  const suggestions = useMemo(() => buildSuggestions(history), [history]);
+  const matches = useMemo(() => {
+    const q = normalizeText(description);
+    if (!q) return [];
+    return suggestions
+      .filter((s) => s.key.includes(q) && s.key !== q)
+      .sort((a, b) => Number(b.key.startsWith(q)) - Number(a.key.startsWith(q)) || b.count - a.count)
+      .slice(0, 6);
+  }, [description, suggestions]);
+
+  function pickSuggestion(s: Suggestion) {
+    setDescription(s.label);
+    setShowSuggest(false);
+    if (!editingExpense) {
+      if (!categoryId) setCategoryId(s.categoryId);
+      if (!cardId && s.cardId) setCardId(s.cardId);
+    }
+    setLastHint(`Última vez: ${formatCurrency(s.lastAmount)} · usado ${s.count} ${s.count === 1 ? "vez" : "veces"}`);
+  }
   const [saving, setSaving] = useState(false);
   // Servicios digitales (Uber, Netflix, Apple...) pagados con tarjeta: el
   // banco cobra 15% de IVA aparte. Si se marca, se guarda el valor con IVA.
@@ -1086,6 +1145,8 @@ function ExpenseForm({
       setIsFreeMoney(false);
     }
     setAddVat(false);
+    setLastHint(null);
+    setShowSuggest(false);
     setError(null);
   }, [editingExpense]);
 
@@ -1168,15 +1229,47 @@ function ExpenseForm({
           </button>
         </div>
       )}
-      <div className="md:col-span-2">
+      <div className="md:col-span-2 relative">
         <label className="label">Descripción</label>
         <input
           className="input"
           required
+          autoComplete="off"
           value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          placeholder="Ej. Supermercado"
+          onChange={(e) => {
+            setDescription(e.target.value);
+            setShowSuggest(true);
+            setLastHint(null);
+          }}
+          onFocus={() => setShowSuggest(true)}
+          onBlur={() => setTimeout(() => setShowSuggest(false), 150)}
+          placeholder="Ej. Supermaxi El Bosque"
         />
+        {showSuggest && matches.length > 0 && (
+          <ul className="absolute z-30 left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden">
+            {matches.map((s) => {
+              const cat = categories.find((c) => c.id === s.categoryId);
+              const card = cards.find((c) => c.id === s.cardId);
+              return (
+                <li key={s.key}>
+                  <button
+                    type="button"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => pickSuggestion(s)}
+                    className="w-full text-left px-3 py-2 hover:bg-brand-50 flex items-center justify-between gap-2"
+                  >
+                    <span className="text-sm text-slate-800 truncate">{s.label}</span>
+                    <span className="text-[11px] text-slate-400 whitespace-nowrap">
+                      {cat ? `${cat.icon} ${cat.name}` : ""}
+                      {card ? ` · ${card.name}` : ""} · {s.count}×
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+        {lastHint && <p className="text-[11px] text-slate-400 mt-1">{lastHint}</p>}
       </div>
       <div>
         <label className="label">Monto</label>
@@ -1236,9 +1329,12 @@ function ExpenseForm({
           />
           Gasto fijo mensual
         </label>
-        <label className="flex items-center gap-2 text-sm text-slate-600">
+        <label
+          className="flex items-center gap-2 text-sm text-slate-600"
+          title="Solo para lo que NO esperaban este mes: una reparación, una consulta médica de urgencia, un regalo de último momento. El supermercado, Uber o comidas normales NO son imprevistos."
+        >
           <input type="checkbox" checked={isExtra} onChange={(e) => setIsExtra(e.target.checked)} />
-          Gasto adicional / no planeado
+          ⚡ Imprevisto (no lo esperábamos este mes)
         </label>
         <label className="flex items-center gap-2 text-sm text-slate-600" title="Se descuenta de tu plata libre de la quincena (ver sección Pareja)">
           <input type="checkbox" checked={isFreeMoney} onChange={(e) => setIsFreeMoney(e.target.checked)} />
